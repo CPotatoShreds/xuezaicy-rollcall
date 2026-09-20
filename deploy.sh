@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# 一键部署：拉取最新代码并重建容器
+# 一键部署：硬同步到远程最新代码并重建容器
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "==> 拉取最新代码"
-git pull
+echo "==> 同步代码到远程最新"
+git fetch origin
+git reset --hard origin/main
 
 if [ ! -f .env ] || ! grep -q "^SITE_IP=" .env; then
   echo "!! 错误：.env 缺失或未设置 SITE_IP（参考 .env.example），Caddy 无法启动"
@@ -19,4 +20,6 @@ docker compose up -d --build
 
 echo "==> 容器状态"
 docker compose ps
-echo "==> 完成：https://<你的域名>:8200  （首次启动等 Caddy 签证书约 10-30 秒）"
+echo "==> Caddy 最近日志"
+docker compose logs caddy --tail 15
+echo "==> 完成：https://$(grep '^SITE_IP=' .env | cut -d= -f2):8200"
