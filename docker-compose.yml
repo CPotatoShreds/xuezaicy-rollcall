@@ -5,7 +5,7 @@ services:
     volumes:
       - ./data:/app/data        # fernet.key + rollcall.db 持久化
     expose:
-      - "8080"                  # 仅容器网络内可见，由 caddy 反代
+      - "8200"                  # 仅容器网络内可见，由 caddy 反代到 8200
     environment:
       - TZ=Asia/Shanghai
     restart: unless-stopped

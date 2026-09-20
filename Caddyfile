@@ -22,6 +22,6 @@ https://{$SITE_IP}:8200 {
 	}
 
 	handle {
-		reverse_proxy app:8080
+		reverse_proxy app:8200
 	}
 }
