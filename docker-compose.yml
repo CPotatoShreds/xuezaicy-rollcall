@@ -11,18 +11,15 @@ services:
     restart: unless-stopped
 
   caddy:
-    build:
-      context: ./caddy
-      dockerfile: Dockerfile    # 内置 DNSPod 插件，用于 DNS-01 签发证书
+    image: caddy:2-alpine
     container_name: rollcall-caddy
     ports:
-      - "8200:8200"             # 对外唯一端口（HTTPS），未备案域名不受拦截
+      - "8200:8200"             # 对外唯一端口（自签 HTTPS）
     environment:
       - TZ=Asia/Shanghai
-      - DNSPOD_API_TOKEN=${DNSPOD_API_TOKEN}   # 格式: ID,TOKEN（DNSPod 控制台创建）
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data        # 证书存储
+      - caddy_data:/data        # 证书存储（含自签根证书 root.crt）
       - caddy_config:/config
     depends_on:
       - app

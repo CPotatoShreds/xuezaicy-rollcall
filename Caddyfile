@@ -1,8 +1,19 @@
-# 换成你的域名（A 记录解析到服务器公网 IP；域名未备案也没关系，8200 端口不拦截）
-# 证书通过 DNS-01 验证自动签发+续期，需要环境变量 DNSPOD_API_TOKEN（格式: ID,TOKEN）
-rollcall.example.com:8200 {
-	tls {
-		dns dnspod {$DNSPOD_API_TOKEN}
+# 无域名方案：自签证书绑定服务器公网 IP
+# 使用前把 1.2.3.4 换成服务器公网 IP
+#
+# 手机首次访问会提示证书不受信任（点继续），然后下载并安装根证书：
+#   https://1.2.3.4:8200/root.crt
+# 安装后（Android: 设置→加密与凭据→安装CA证书）刷新即无警告，
+# 且相机权限正常（HTTPS 安全上下文）。
+https://1.2.3.4:8200 {
+	tls internal
+
+	handle /root.crt {
+		root * /data/caddy/pki/authorities/local
+		file_server
 	}
-	reverse_proxy app:8080
+
+	handle {
+		reverse_proxy app:8080
+	}
 }
