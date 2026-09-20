@@ -1,0 +1,8 @@
+# 换成你的域名（A 记录解析到服务器公网 IP；域名未备案也没关系，8200 端口不拦截）
+# 证书通过 DNS-01 验证自动签发+续期，需要环境变量 DNSPOD_API_TOKEN（格式: ID,TOKEN）
+rollcall.example.com:8200 {
+	tls {
+		dns dnspod {$DNSPOD_API_TOKEN}
+	}
+	reverse_proxy app:8080
+}

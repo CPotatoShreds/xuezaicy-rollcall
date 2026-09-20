@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    container_name: rollcall-app
+    volumes:
+      - ./data:/app/data        # fernet.key + rollcall.db 持久化
+    expose:
+      - "8080"                  # 仅容器网络内可见，由 caddy 反代
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile    # 内置 DNSPod 插件，用于 DNS-01 签发证书
+    container_name: rollcall-caddy
+    ports:
+      - "8200:8200"             # 对外唯一端口（HTTPS），未备案域名不受拦截
+    environment:
+      - TZ=Asia/Shanghai
+      - DNSPOD_API_TOKEN=${DNSPOD_API_TOKEN}   # 格式: ID,TOKEN（DNSPod 控制台创建）
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # 证书存储
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

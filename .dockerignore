@@ -1,0 +1,10 @@
+data/
+__pycache__/
+*.log
+test_api.py
+*.har
+*.md
+poc_idor.py
+rollcall_proxy.egg-info/
+uv.lock
+.git/

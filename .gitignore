@@ -1,0 +1,21 @@
+# 运行时数据：数据库 + Fernet 密钥（等于全部用户的 CAS 凭据保险柜，严禁入库）
+data/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# 环境变量（DNSPod Token 等）
+.env
+
+# 敏感抓包文件
+*.har
+
+# IDE / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

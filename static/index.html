@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#f4f6f9">
+<title>签到共享</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#f4f6f9;--card:#ffffff;--surface:#e5eaf1;--primary:#2f6bff;--success:#16a34a;--danger:#dc2626;--warning:#d97706;--text:#111827;--text2:#5b6472;--text3:#98a2b3;--radius:12px;--radius-sm:8px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#e9edf3;color:var(--text);min-height:100dvh;overflow-x:hidden;font-size:14px}
+input,textarea,button{font-family:inherit}
+#app{max-width:460px;margin:0 auto;min-height:100dvh;background:var(--bg);box-shadow:0 0 32px rgba(15,23,42,.08)}
+
+/* Layout */
+.page{display:none;padding-bottom:20px}.page.active{display:block}
+.header{background:var(--card);padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--surface);position:sticky;top:0;z-index:100}
+.header h1{font-size:17px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.header .back{font-size:20px;cursor:pointer;color:var(--text2);background:none;border:none;padding:2px 6px}
+.conn-badge{font-size:10px;padding:3px 10px;border-radius:12px;font-weight:500;white-space:nowrap}
+.conn-badge.online{background:#16a34a1a;color:var(--success);border:1px solid var(--success)}
+.conn-badge.offline{background:#dc26261a;color:var(--danger);border:1px solid var(--danger)}
+.conn-badge.connecting{background:#d977061a;color:var(--warning);border:1px solid var(--warning)}
+
+/* Cards */
+.card{background:var(--card);border-radius:var(--radius);padding:14px;margin:10px 12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+.card-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px}
+.card-title .flex{display:flex;justify-content:space-between;align-items:center}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:all .12s;text-decoration:none}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-success{background:var(--success);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-surface{background:var(--surface);color:var(--text)}
+.btn-outline{background:transparent;color:var(--text2);border:1px solid var(--surface)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-block{display:flex;width:100%}
+.btn-row{display:flex;gap:8px;margin-top:10px}
+.btn-row .btn{flex:1}
+
+/* Inputs */
+.inp{width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--surface);border-radius:var(--radius-sm);color:var(--text);font-size:13px;outline:none;transition:border .2s}
+.inp:focus{border-color:var(--primary)}
+.inp::placeholder{color:var(--text3)}
+.inp-group{margin-bottom:10px}
+.inp-group label{display:block;font-size:11px;color:var(--text2);margin-bottom:3px}
+
+/* Auth page */
+.auth-box{max-width:380px;margin:48px auto;padding:0 16px}
+.auth-box h2{font-size:22px;margin-bottom:4px}
+.auth-box p{font-size:13px;color:var(--text2);margin-bottom:22px}
+
+/* Groups */
+.group-item{display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--surface);cursor:pointer}
+.group-item:last-child{border-bottom:none}
+.group-item .g-icon{width:36px;height:36px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;font-weight:600;flex-shrink:0;margin-right:10px}
+.group-item .g-info{flex:1;min-width:0}
+.group-item .g-name{font-size:14px;font-weight:500}
+.group-item .g-meta{font-size:11px;color:var(--text3)}
+
+/* 图标按钮 + 展开菜单 */
+.icon-btn{width:32px;height:32px;border-radius:8px;background:none;border:none;color:var(--text2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .12s}
+.icon-btn:active{background:var(--surface)}
+.icon-btn svg{width:18px;height:18px}
+.icon-btn.add{background:var(--primary);color:#fff;border-radius:9px}
+.icon-btn.add:active{background:#1d4ed8}
+.add-menu{position:absolute;top:52px;right:12px;background:var(--card);border-radius:12px;box-shadow:0 6px 24px rgba(15,23,42,.16);padding:4px;display:none;z-index:150;min-width:132px}
+.add-menu.open{display:block}
+.add-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:11px 14px;border:none;background:none;font-size:13px;color:var(--text);cursor:pointer;border-radius:9px;text-align:left}
+.add-menu button:active{background:var(--bg)}
+.add-menu button svg{width:16px;height:16px;color:var(--primary)}
+
+/* Scanner */
+.scanner-wrap{margin:8px 12px;background:var(--card);border-radius:var(--radius);padding:10px;text-align:center;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+#gReader{width:100%;max-width:360px;margin:0 auto;border-radius:var(--radius-sm);overflow:hidden}
+#gReader video{border-radius:var(--radius-sm)}
+
+/* 扫码按钮（右上角） */
+.scan-btn{width:34px;height:34px;border-radius:9px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;flex-shrink:0}
+.scan-btn:active{transform:scale(.94)}
+.scan-btn svg{width:19px;height:19px}
+
+/* 成员状态条 */
+.member-strip{display:flex;gap:8px;overflow-x:auto;padding:10px 12px 4px;scrollbar-width:none}
+.member-strip::-webkit-scrollbar{display:none}
+.mchip{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:18px;background:var(--card);border:1px solid var(--surface);font-size:12px;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+.mchip .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.mchip .dot.online{background:var(--success)}
+.mchip .dot.offline{background:var(--text3)}
+.mchip .dot.me{background:var(--primary)}
+.mchip.ok{border-color:#16a34a55;background:#16a34a0d}
+.mchip.failed{border-color:#dc262655;background:#dc26260d}
+.mchip .st{font-size:10px;color:var(--text2)}
+
+/* 组信息行 */
+.group-meta{display:flex;justify-content:space-between;align-items:center;padding:8px 16px 2px;font-size:11px;color:var(--text3)}
+.group-meta .code{font-family:monospace;cursor:pointer;color:var(--primary)}
+.group-meta .leave{cursor:pointer;color:var(--danger);background:none;border:none;font-size:11px;padding:0}
+
+/* Feed */
+.feed-section{margin:8px 12px 12px}
+.feed-entry{padding:9px 2px;border-bottom:1px solid var(--surface);font-size:13px;line-height:1.45}
+.feed-entry:last-child{border-bottom:none}
+.feed-time{font-size:10px;color:var(--text3)}
+.feed-msg{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.feed-name{font-weight:600}
+.feed-status{font-size:12px}
+.feed-status.ok{color:var(--success)}
+.feed-status.fail{color:var(--danger)}
+.feed-status.info{color:var(--primary)}
+
+/* Summary */
+.summary{display:flex;gap:6px;margin-bottom:10px}
+.summary-item{flex:1;text-align:center;padding:10px;background:var(--bg);border-radius:var(--radius-sm)}
+.summary-item .num{font-size:22px;font-weight:700}
+.summary-item .num.green{color:var(--success)}
+.summary-item .num.red{color:var(--danger)}
+.summary-item .num.blue{color:var(--primary)}
+.summary-item .label{font-size:10px;color:var(--text2);margin-top:1px}
+
+/* Empty */
+.empty{padding:30px 16px;text-align:center;color:var(--text3)}
+.empty p{font-size:13px}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.active{display:flex}
+.modal{background:var(--card);border-radius:var(--radius);padding:20px;width:100%;max-width:380px;max-height:85vh;overflow-y:auto}
+.modal h2{font-size:16px;margin-bottom:14px}
+
+/* Status items */
+.stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--surface);font-size:13px}
+.stat-row:last-child{border-bottom:none}
+.stat-row .label{color:var(--text2)}
+.stat-row .value{color:var(--text);font-weight:500}
+.stat-row .value.ok{color:var(--success)}
+.stat-row .value.fail{color:var(--danger)}
+
+/* Toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#111827;color:#f9fafb;padding:10px 22px;border-radius:8px;font-size:13px;z-index:300;box-shadow:0 4px 24px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--surface);border-radius:4px}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ============ LOGIN ============ -->
+  <div class="page active" id="page-login">
+    <div class="auth-box">
+      <h2>签到共享</h2>
+      <p>统一认证登录，登录即绑定</p>
+      <div id="auth-login">
+        <div class="inp-group"><label>统一认证码</label><input class="inp" id="loginId" placeholder="2024211119"></div>
+        <div class="inp-group"><label>统一认证密码</label><input class="inp" id="loginPwd" type="password" placeholder="CAS 密码" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <button class="btn btn-primary btn-block" onclick="doLogin()">登录</button>
+      </div>
+      <div id="authError" style="color:var(--danger);font-size:12px;margin-top:10px;display:none"></div>
+    </div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div class="page" id="page-dashboard">
+    <div class="header">
+      <h1>签到共享</h1>
+      <span class="conn-badge online" id="connBadge">在线</span>
+      <button class="icon-btn" onclick="showSettings()" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="icon-btn" onclick="doLogout()" title="退出登录">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+      <button class="icon-btn add" onclick="toggleAddMenu(event)" title="创建 / 加入组">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <div class="add-menu" id="addMenu">
+        <button onclick="showCreateGroup()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          创建组
+        </button>
+        <button onclick="showJoinGroup()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          加入组
+        </button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="flex"><span>我的组</span><span style="font-size:11px;color:var(--text3)" id="groupCount"></span></div></div>
+      <div id="groupList"><div class="empty"><p>点右上角 ＋ 创建或加入组</p></div></div>
+    </div>
+  </div>
+
+  <!-- ============ GROUP VIEW ============ -->
+  <div class="page" id="page-group">
+    <div class="header">
+      <button class="back" onclick="backToDashboard()">&larr;</button>
+      <h1 id="groupTitle">组</h1>
+      <span class="conn-badge online" id="gConnBadge">在线</span>
+      <button class="scan-btn" onclick="toggleScanner()" title="扫码签到">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="member-strip" id="gMemberStrip"><div class="mchip"><span class="dot offline"></span>加载中...</div></div>
+    <div class="group-meta">
+      <span>邀请码 <span class="code" id="gInviteCode" onclick="copyInviteCode()"></span>（点按复制）</span>
+      <button class="leave" onclick="leaveGroup()">退出此组</button>
+    </div>
+
+    <div class="scanner-wrap" id="gScannerWrap" style="display:none">
+      <div id="gReader"></div>
+      <button class="btn btn-outline" style="margin-top:6px;width:100%" onclick="stopScanner()">关闭相机</button>
+    </div>
+
+    <div id="gResultPanel" style="display:none">
+      <div class="card">
+        <div class="card-title">本次签到</div>
+        <div class="summary" id="gSummary"></div>
+        <div id="gResultFeed"></div>
+      </div>
+    </div>
+
+    <div class="feed-section">
+      <div class="card-title" style="padding:4px 2px 0">组动态</div>
+      <div id="gFeedList"><div class="empty"><p>暂无动态，点右上角扫码开签</p></div></div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <h2>设置</h2>
+      <div id="settingsContent"></div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">保存</button><button class="btn btn-outline" onclick="closeSettings()">关闭</button></div>
+    </div>
+  </div>
+
+  <!-- ============ CREATE GROUP MODAL ============ -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal">
+      <h2>创建组</h2>
+      <div class="inp-group"><label>组名称</label><input class="inp" id="createGroupName" placeholder="eg. 计科一班签到群" onkeydown="if(event.key==='Enter')doCreateGroup()"></div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="doCreateGroup()">创建</button><button class="btn btn-outline" onclick="closeCreateGroup()">取消</button></div>
+    </div>
+  </div>
+
+  <!-- ============ JOIN GROUP MODAL ============ -->
+  <div class="modal-overlay" id="joinModal">
+    <div class="modal">
+      <h2>加入组</h2>
+      <div class="inp-group"><label>邀请码</label><input class="inp" id="joinCode" placeholder="8位邀请码" style="text-transform:uppercase;font-family:monospace" onkeydown="if(event.key==='Enter')doJoinGroup()"></div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="doJoinGroup()">加入</button><button class="btn btn-outline" onclick="closeJoinGroup()">取消</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ STATE ============
+let TOKEN = localStorage.getItem('rc_token') || '';
+let ME = null;
+let currentGroupId = null;
+let scanner = null;
+let pollTimer = null;
+let lastPollTime = 0;
+let feed = [];
+const MAX_FEED = 200;
+let totalOk = 0, totalFail = 0;
+const POLL_INTERVAL = 1500;
+
+// ============ INIT ============
+function init() {
+  if (TOKEN) {
+    loadDashboard();
+  }
+}
+
+// ============ API ============
+async function api(method, path, data) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  const opts = { method, headers };
+  if (data) opts.body = JSON.stringify(data);
+  try {
+    const resp = await fetch(path, opts);
+    const json = await resp.json();
+    if (!resp.ok) {
+      const err = new Error(json.error || '请求失败');
+      err.payload = json;
+      throw err;
+    }
+    return json;
+  } catch (e) {
+    if (e.message.includes('401') || e.message.includes('未登录') || e.message.includes('过期')) {
+      TOKEN = '';
+      localStorage.removeItem('rc_token');
+      showPage('login');
+    }
+    throw e;
+  }
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+}
+
+// ＋号展开菜单
+function toggleAddMenu(e) {
+  e.stopPropagation();
+  document.getElementById('addMenu').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('addMenu');
+  if (menu && menu.classList.contains('open') && !menu.contains(e.target)) {
+    menu.classList.remove('open');
+  }
+});
+function closeAddMenu() {
+  document.getElementById('addMenu').classList.remove('open');
+}
+
+// ============ AUTH ============
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+function hideAuthError() {
+  document.getElementById('authError').style.display = 'none';
+}
+
+async function doLogin() {
+  const student_id = document.getElementById('loginId').value.trim();
+  const password = document.getElementById('loginPwd').value.trim();
+  if (!student_id || !password) { showAuthError('请填写统一认证码和密码'); return; }
+  hideAuthError();
+  const btn = document.querySelector('#auth-login button.btn-primary');
+  btn.disabled = true;
+  btn.textContent = '统一认证中...';
+  try {
+    const r = await api('POST', '/api/login', { student_id, password });
+    TOKEN = r.token;
+    localStorage.setItem('rc_token', TOKEN);
+    loadDashboard();
+  } catch (e) {
+    showAuthError(e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '登录';
+}
+
+function doLogout() {
+  TOKEN = '';
+  localStorage.removeItem('rc_token');
+  ME = null;
+  stopPolling();
+  showPage('login');
+}
+
+// ============ DASHBOARD ============
+async function loadDashboard() {
+  showPage('dashboard');
+  try {
+    const r = await api('GET', '/api/me');
+    ME = r.user;
+    document.getElementById('connBadge').textContent = ME.name || '在线';
+  } catch (e) {
+    // ignore
+  }
+  await loadGroups();
+}
+
+async function loadGroups() {
+  try {
+    const r = await api('GET', '/api/groups');
+    const list = document.getElementById('groupList');
+    const groups = r.groups || [];
+    document.getElementById('groupCount').textContent = groups.length + ' 个组';
+    if (groups.length === 0) {
+      list.innerHTML = '<div class="empty"><p>暂无组，创建一个或加入已有组</p></div>';
+      return;
+    }
+    list.innerHTML = groups.map(g => `
+      <div class="group-item" onclick="openGroup(${g.id})">
+        <div class="g-icon">${esc(g.name.charAt(0))}</div>
+        <div class="g-info">
+          <div class="g-name">${esc(g.name)}</div>
+          <div class="g-meta">${g.member_count} 人 · 邀请码: ${esc(g.invite_code)}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    showToast(e.message);
+  }
+}
+
+// ============ CREATE / JOIN GROUP ============
+function showCreateGroup() {
+  closeAddMenu();
+  document.getElementById('createModal').classList.add('active');
+  setTimeout(() => document.getElementById('createGroupName').focus(), 100);
+}
+
+function closeCreateGroup() {
+  document.getElementById('createModal').classList.remove('active');
+}
+
+async function doCreateGroup() {
+  const name = document.getElementById('createGroupName').value.trim();
+  if (!name) { showToast('请输入组名'); return; }
+  try {
+    await api('POST', '/api/groups', { name });
+    closeCreateGroup();
+    document.getElementById('createGroupName').value = '';
+    showToast('组已创建');
+    await loadGroups();
+  } catch (e) {
+    showToast(e.message);
+  }
+}
+
+function showJoinGroup() {
+  closeAddMenu();
+  document.getElementById('joinModal').classList.add('active');
+  setTimeout(() => document.getElementById('joinCode').focus(), 100);
+}
+
+function closeJoinGroup() {
+  document.getElementById('joinModal').classList.remove('active');
+}
+
+async function doJoinGroup() {
+  const invite_code = document.getElementById('joinCode').value.trim().toUpperCase();
+  if (!invite_code) { showToast('请输入邀请码'); return; }
+  try {
+    await api('POST', '/api/groups/join', { invite_code });
+    closeJoinGroup();
+    document.getElementById('joinCode').value = '';
+    showToast('已加入组');
+    await loadGroups();
+  } catch (e) {
+    showToast(e.message);
+  }
+}
+
+// ============ GROUP VIEW ============
+let gid = null;
+let currentInviteCode = '';
+async function openGroup(id) {
+  gid = id;
+  currentGroupId = id;
+  showPage('group');
+  try {
+    const r = await api('GET', '/api/groups/' + id);
+    document.getElementById('groupTitle').textContent = esc(r.name);
+    currentInviteCode = r.invite_code || '';
+    document.getElementById('gInviteCode').textContent = currentInviteCode;
+  } catch (e) { showToast(e.message); }
+  await loadMembers();
+  startPolling();
+}
+
+function backToDashboard() {
+  stopPolling();
+  gid = null;
+  currentGroupId = null;
+  stopScanner();
+  feed = [];
+  loadDashboard();
+}
+
+// ============ POLLING ============
+function startPolling() {
+  stopPolling();
+  // 进组首拉最近 24h 历史，之后增量轮询
+  lastPollTime = Date.now() / 1000 - 86400;
+  doPoll();
+  pollTimer = setInterval(doPoll, POLL_INTERVAL);
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function doPoll() {
+  if (!gid) return;
+  const since = lastPollTime;
+  try {
+    const r = await api('GET', '/api/groups/' + gid + '/poll?since=' + since);
+    lastPollTime = r.now || (Date.now() / 1000);
+    for (const item of (r.items || [])) {
+      addGFeed(item.scanner, '扫码了签到二维码', 'info', item.ts * 1000);
+    }
+    for (const ev of (r.events || [])) {
+      if (ev.status === 'scan') continue; // 与 qr items 重复
+      const okb = ev.status === 'ok';
+      const msg = ev.scanner === ev.target
+        ? (okb ? '签到成功' : '签到失败' + (ev.detail ? ': ' + ev.detail : ''))
+        : '帮助 ' + ev.target + (okb ? ' 签到成功' : ' 签到失败' + (ev.detail ? ': ' + ev.detail : ''));
+      addGFeed(ev.scanner, msg, okb ? 'ok' : 'fail', ev.ts * 1000);
+    }
+    setConnStatus(true);
+  } catch (e) {
+    setConnStatus(false);
+  }
+}
+
+function setConnStatus(ok) {
+  const el = document.getElementById('gConnBadge') || document.getElementById('connBadge');
+  if (ok) { el.className = 'conn-badge online'; el.textContent = ME ? '在线' : '未连接'; }
+  else { el.className = 'conn-badge offline'; el.textContent = '离线'; }
+}
+
+// ============ SCANNER ============
+// 解析二维码内容 → { data, rollcall_id }
+// 支持：纯凭据(13位时间戳+29hex)、URL(含 data/code 参数或 /rollcall/123 路径)、JSON
+function parseQrContent(text) {
+  text = (text || '').trim();
+  const out = { data: null, rollcall_id: null, raw: text };
+
+  // 1. JSON 格式
+  try {
+    const j = JSON.parse(text);
+    if (j && typeof j === 'object') {
+      out.data = j.data || j.code || j.token || null;
+      out.rollcall_id = String(j.rollcall_id || j.rollcallId || j.rc_id || '') || null;
+      if (out.data) return out;
+    }
+  } catch (e) {}
+
+  // 2. URL 格式
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      const u = new URL(text);
+      for (const k of ['data', 'code', 'token', 'qrcode', 'qr_data']) {
+        const v = u.searchParams.get(k);
+        if (v) { out.data = v; break; }
+      }
+      const pm = u.pathname.match(/\/(?:rollcall|qr[a-z]*)\/(\d+)/i);
+      if (pm) out.rollcall_id = pm[1];
+      if (!out.rollcall_id) {
+        for (const k of ['rollcall_id', 'rollcallId', 'rc_id']) {
+          const v = u.searchParams.get(k);
+          if (v) { out.rollcall_id = v; break; }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. 正则直接找凭据 (13位时间戳 + 29位hex = 42字符)
+  const cm = text.match(/(\d{13}[0-9a-f]{29})/i);
+  if (cm) out.data = cm[1];
+
+  return out;
+}
+
+function toggleScanner() {
+  if (scanner) { stopScanner(); return; }
+  document.getElementById('gScannerWrap').style.display = 'block';
+  const reader = document.getElementById('gReader');
+  reader.innerHTML = '';
+  document.getElementById('gScannerWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  scanner = new Html5Qrcode("gReader");
+  scanner.start({
+    facingMode: "environment",
+    videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+  }, { fps: 10, qrbox: { width: 240, height: 240 } }, onScanOk, () => {}).catch(err => {
+    showToast('无法启动相机: ' + err);
+    stopScanner();
+  });
+}
+
+function stopScanner() {
+  if (scanner) { try { scanner.stop(); } catch(e) {} scanner = null; }
+  const wrap = document.getElementById('gScannerWrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+async function onScanOk(decodedText) {
+  stopScanner();
+  const p = parseQrContent(decodedText);
+  if (!p.data) { showToast('未能从二维码解析出签到凭据'); return; }
+  let rc = p.rollcall_id;
+  if (!rc) rc = prompt('二维码中未包含 rollcall_id，请手动输入：');
+  if (!rc) return;
+  await doPush(rc, p.data);
+}
+
+async function doPush(rollcallId, qrData) {
+  document.getElementById('gResultPanel').style.display = 'block';
+  document.getElementById('gResultFeed').innerHTML = '';
+  totalOk = 0; totalFail = 0;
+  updateSummary();
+  const line = (name, msg, type) => {
+    const rf = document.getElementById('gResultFeed');
+    const time = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+    const el = document.createElement('div');
+    el.className = 'feed-entry';
+    el.innerHTML = '<div class="feed-time">' + time + '</div><div class="feed-msg"><span class="feed-name">' + esc(name) + '</span> <span class="feed-status ' + type + '">' + esc(msg) + '</span></div>';
+    rf.prepend(el);
+  };
+
+  line('我', '发送签到请求...', 'info');
+
+  try {
+    const r = await api('POST', '/api/groups/' + gid + '/push', {
+      rollcall_id: rollcallId,
+      data: qrData,
+      timestamp: Date.now(),
+    });
+    const results = r.results || [];
+    for (const res of results) {
+      if (res.status === 'ok') {
+        line(res.name, '签到成功', 'ok');
+        totalOk++;
+      } else {
+        line(res.name, '签到失败: ' + (res.detail || ''), 'fail');
+        totalFail++;
+      }
+    }
+    line('系统', '签到完成 (' + results.length + ' 人)', 'info');
+  } catch (e) {
+    line('系统', '推送失败: ' + e.message, 'fail');
+    totalFail++;
+  }
+  updateSummary();
+  loadMembers();
+}
+
+function updateSummary() {
+  document.getElementById('gSummary').innerHTML =
+    '<div class="summary-item"><div class="num blue">' + (totalOk + totalFail) + '</div><div class="label">总计</div></div>' +
+    '<div class="summary-item"><div class="num green">' + totalOk + '</div><div class="label">成功</div></div>' +
+    '<div class="summary-item"><div class="num red">' + totalFail + '</div><div class="label">失败</div></div>';
+}
+
+// ============ FEED ============
+function addGFeed(name, message, type, ts) {
+  const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2,5), time: ts || Date.now(), name, message, type };
+  feed.unshift(entry);
+  if (feed.length > MAX_FEED) feed.length = MAX_FEED;
+  renderGFeed();
+  if (document.getElementById('gResultPanel').style.display === 'block') {
+    const rf = document.getElementById('gResultFeed');
+    const time = new Date(entry.time).toLocaleTimeString('zh-CN', {hour12:false});
+    const cls = entry.type === 'ok' ? 'ok' : entry.type === 'fail' ? 'fail' : 'info';
+    const el = document.createElement('div');
+    el.className = 'feed-entry';
+    el.innerHTML = '<div class="feed-time">' + time + '</div><div class="feed-msg"><span class="feed-name">' + esc(entry.name) + '</span> <span class="feed-status ' + cls + '">' + esc(entry.message) + '</span></div>';
+    rf.prepend(el);
+  }
+}
+
+function renderGFeed() {
+  const container = document.getElementById('gFeedList');
+  if (feed.length === 0) {
+    container.innerHTML = '<div class="empty"><p>等待动态...</p></div>';
+    return;
+  }
+  container.innerHTML = feed.slice(0, 100).map(e => {
+    const time = new Date(e.time).toLocaleTimeString('zh-CN', {hour12:false});
+    const cls = e.type === 'ok' ? 'ok' : e.type === 'fail' ? 'fail' : 'info';
+    const nameHtml = e.name ? '<span class="feed-name">' + esc(e.name) + '</span>' : '';
+    return '<div class="feed-entry"><div class="feed-time">' + time + '</div><div class="feed-msg">' + nameHtml + ' <span class="feed-status ' + cls + '">' + esc(e.message) + '</span></div></div>';
+  }).join('');
+}
+
+// ============ MEMBERS ============
+async function loadMembers() {
+  if (!gid) return;
+  try {
+    const r = await api('GET', '/api/groups/' + gid + '/members');
+    const members = r.members || [];
+    const container = document.getElementById('gMemberStrip');
+    if (members.length === 0) {
+      container.innerHTML = '<div class="mchip"><span class="dot offline"></span>暂无成员</div>';
+      return;
+    }
+    container.innerHTML = members.map(m => {
+      const dotCls = m.session_valid ? 'online' : 'offline';
+      const isMe = ME && m.id === ME.id;
+      let cls = '', st = '';
+      if (m.last_signin === 'ok') {
+        cls = 'ok';
+        const t = m.last_signin_ts ? new Date(m.last_signin_ts * 1000).toLocaleTimeString('zh-CN', {hour12:false, hour:'2-digit', minute:'2-digit'}) : '';
+        st = '<span class="st">已签 ' + t + '</span>';
+      } else if (m.last_signin === 'failed') {
+        cls = 'failed';
+        st = '<span class="st">失败</span>';
+      }
+      return '<div class="mchip ' + cls + '"><span class="dot ' + dotCls + (isMe ? ' me' : '') + '"></span>'
+        + esc(m.name) + (isMe ? '(我)' : '') + st + '</div>';
+    }).join('');
+  } catch (e) {}
+}
+
+// ============ GROUP ACTIONS ============
+async function copyInviteCode() {
+  if (!currentInviteCode) return;
+  try {
+    await navigator.clipboard.writeText(currentInviteCode);
+    showToast('已复制邀请码 ' + currentInviteCode);
+  } catch (e) {
+    showToast('复制失败，邀请码：' + currentInviteCode);
+  }
+}
+
+async function leaveGroup() {
+  if (!gid) return;
+  if (!confirm('确定退出此组？')) return;
+  try {
+    await api('POST', '/api/groups/' + gid + '/leave');
+    showToast('已退出');
+    backToDashboard();
+  } catch (e) {
+    showToast(e.message);
+  }
+}
+
+// ============ SETTINGS ============
+function showSettings() {
+  if (!ME) return;
+  const sessStatus = ME.x_session_ok ? '<span style="color:var(--success)">有效</span>' : '<span style="color:var(--danger)">无效</span>';
+  document.getElementById('settingsContent').innerHTML = `
+    <div class="stat-row"><span class="label">统一认证码</span><span class="value">${esc(ME.student_id)}</span></div>
+    <div class="inp-group"><label>昵称</label><input class="inp" id="setName" value="${esc(ME.name)}"></div>
+    <div class="inp-group"><label>设备 ID（可选）</label><input class="inp" id="setDevId" value="${esc(ME.device_id)}" placeholder="留空使用所在组的设备ID"></div>
+    <div class="stat-row"><span class="label">x-session-id</span><span class="value ${sessStatus}">${sessStatus}</span></div>
+    <div class="stat-row"><span class="label">预览</span><span class="value" style="font-size:11px;font-family:monospace;color:var(--text3)">${ME.x_session_preview || '无'}</span></div>
+    <button class="btn btn-sm btn-outline btn-block" onclick="refreshSession()" style="margin-top:4px">刷新会话</button>
+  `;
+  document.getElementById('settingsModal').classList.add('active');
+}
+
+async function refreshSession() {
+  try {
+    await api('POST', '/api/refresh-session');
+    showToast('会话已刷新');
+    // Reload me
+    const r = await api('GET', '/api/me');
+    ME = r.user;
+    showSettings(); // refresh the settings view
+  } catch (e) {
+    showToast('刷新失败: ' + e.message);
+  }
+}
+
+async function saveSettings() {
+  const data = {};
+  const name = document.getElementById('setName').value.trim();
+  const devId = document.getElementById('setDevId').value.trim();
+  if (name && name !== ME.name) data.name = name;
+  if (devId !== ME.device_id) data.device_id = devId;
+  if (Object.keys(data).length === 0) { closeSettings(); return; }
+  try {
+    await api('POST', '/api/me', data);
+    showToast('已保存');
+    const r = await api('GET', '/api/me');
+    ME = r.user;
+    closeSettings();
+    loadDashboard();
+  } catch (e) {
+    showToast('保存失败: ' + e.message);
+  }
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('active');
+}
+
+// ============ UTILS ============
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ============ START ============
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
