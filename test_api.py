@@ -178,5 +178,21 @@ print()
 if errs:
     print(f"=== {errs} failures ===")
     sys.exit(1)
-else:
-    print("=== All tests passed! ===")
+
+# ===== 清理测试数据（避免污染生产库）=====
+conn = sqlite3.connect("data/rollcall.db")
+conn.execute("PRAGMA foreign_keys=ON")
+conn.execute("DELETE FROM qr_logs WHERE group_id=?", (gid,))
+conn.execute("DELETE FROM signin_events WHERE group_id=?", (gid,))
+conn.execute("DELETE FROM group_members WHERE group_id=?", (gid,))
+conn.execute("DELETE FROM groups_t WHERE id=?", (gid,))
+for sid in (sid1, sid2):
+    row = conn.execute("SELECT id FROM users WHERE student_id=?", (sid,)).fetchone()
+    if row:
+        uid = row[0]
+        for t, c in [("qr_logs", "user_id"), ("signin_events", "scanner_id"), ("group_members", "user_id")]:
+            conn.execute(f"DELETE FROM {t} WHERE {c}=?", (uid,))
+        conn.execute("DELETE FROM users WHERE id=?", (uid,))
+conn.commit()
+conn.close()
+print("=== All tests passed! (test data cleaned) ===")
