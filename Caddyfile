@@ -5,6 +5,11 @@
 #   https://<SITE_IP>:8200/root.crt
 # 安装后（Android: 设置→加密与凭据→安装CA证书）刷新即无警告，
 # 且相机权限正常（HTTPS 安全上下文）。
+# 开启调试日志（定位 TLS 握手问题用，稳定后可删除此全局块）
+{
+	debug
+}
+
 https://{$SITE_IP}:8200 {
 	bind 0.0.0.0
 	tls internal
