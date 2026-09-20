@@ -156,8 +156,8 @@ input,textarea,button{font-family:inherit}
       <h2>签到共享</h2>
       <p>统一认证登录，登录即绑定</p>
       <div id="auth-login">
-        <div class="inp-group"><label>统一认证码</label><input class="inp" id="loginId" placeholder="2024211119"></div>
-        <div class="inp-group"><label>统一认证密码</label><input class="inp" id="loginPwd" type="password" placeholder="CAS 密码" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div class="inp-group"><label>统一认证码</label><input class="inp" id="loginId"></div>
+        <div class="inp-group"><label>统一认证密码</label><input class="inp" id="loginPwd" type="password" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <button class="btn btn-primary btn-block" onclick="doLogin()">登录</button>
       </div>
       <div id="authError" style="color:var(--danger);font-size:12px;margin-top:10px;display:none"></div>
@@ -573,10 +573,7 @@ function toggleScanner() {
   reader.innerHTML = '';
   document.getElementById('gScannerWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
   scanner = new Html5Qrcode("gReader");
-  scanner.start({
-    facingMode: "environment",
-    videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-  }, { fps: 10, qrbox: { width: 240, height: 240 } }, onScanOk, () => {}).catch(err => {
+  scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 240 } }, onScanOk, () => {}).catch(err => {
     showToast('无法启动相机: ' + err);
     stopScanner();
   });
