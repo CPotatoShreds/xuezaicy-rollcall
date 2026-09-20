@@ -16,6 +16,9 @@ fi
 
 echo "==> 构建并启动容器"
 docker compose up -d --build
+# Caddyfile 是 bind-mount，内容变更不会触发 up -d 重建，必须显式 reload
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || \
+  docker compose restart caddy
 
 echo "==> 容器状态"
 docker compose ps
