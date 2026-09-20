@@ -6,6 +6,10 @@ cd "$(dirname "$0")"
 echo "==> 拉取最新代码"
 git pull
 
+if [ ! -f .env ] || ! grep -q "^SITE_IP=" .env; then
+  echo "!! 错误：.env 缺失或未设置 SITE_IP（参考 .env.example），Caddy 无法启动"
+  exit 1
+fi
 if [ ! -d data ]; then
   echo "!! 提示：data/ 不存在（数据库 + fernet.key）——首次部署可忽略，会自动生成；迁移老库需手动上传"
 fi

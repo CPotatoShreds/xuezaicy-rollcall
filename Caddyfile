@@ -1,11 +1,12 @@
-# 无域名方案：自签证书绑定服务器公网 IP
-# 使用前把 1.2.3.4 换成服务器公网 IP
+# 无域名方案：自签证书，IP 通过环境变量注入（.env 里 SITE_IP=服务器公网 IP）
+# bind 0.0.0.0：容器内没有公网 IP，必须绑定所有网卡；证书 SAN 由 SITE_IP 决定。
 #
 # 手机首次访问会提示证书不受信任（点继续），然后下载并安装根证书：
-#   https://1.2.3.4:8200/root.crt
+#   https://<SITE_IP>:8200/root.crt
 # 安装后（Android: 设置→加密与凭据→安装CA证书）刷新即无警告，
 # 且相机权限正常（HTTPS 安全上下文）。
-https://1.2.3.4:8200 {
+https://{$SITE_IP}:8200 {
+	bind 0.0.0.0
 	tls internal
 
 	handle /root.crt {

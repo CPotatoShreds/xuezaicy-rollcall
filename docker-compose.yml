@@ -17,6 +17,7 @@ services:
       - "8200:8200"             # 对外唯一端口（自签 HTTPS）
     environment:
       - TZ=Asia/Shanghai
+      - SITE_IP=${SITE_IP}      # 从 .env 注入，Caddyfile 用于证书 SAN 与站点地址
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data        # 证书存储（含自签根证书 root.crt）
