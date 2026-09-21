@@ -525,13 +525,53 @@ function setConnStatus(ok) {
 }
 
 // ============ SCANNER ============
-// 解析二维码内容 → { data, rollcall_id }
-// 支持：纯凭据(13位时间戳+29hex)、URL(含 data/code 参数或 /rollcall/123 路径)、JSON
+// Tronclass 二维码真实格式（逆向自 mobile.tc.cqupt.edu.cn 前端并实测验证）：
+//   /j?p=<键值对>，对按 ! 分隔、键值按 ~ 分隔
+//   键为字段名表的 base36 下标：0=courseId 1=activityId 2=activityType 3=data
+//   4=rollcallId 5=groupSetId 6=accessCode 7=action 8=enableGroupRollcall
+//   9=createUser a=joinCourse
+//   \x10 开头的值为 base36 数字（可含 . 小数段）；其余为原文（\x1F \x1E 转义 ~ !）
+// 实测: /j?p=0~\x102kgs!3~<42位凭据>!4~\x10il47
+//       → courseId=119836, data=<凭据>, rollcallId=867175
+const TC_QR_KEYS = { 0:'courseId', 1:'activityId', 2:'activityType', 3:'data', 4:'rollcallId', 5:'groupSetId', 6:'accessCode', 7:'action', 8:'enableGroupRollcall', 9:'createUser', a:'joinCourse' };
+
+function parseTcCompact(payload) {
+  const obj = {};
+  payload.split('!').filter(Boolean).forEach(seg => {
+    const i = seg.indexOf('~');
+    if (i < 0) return;
+    const k = seg.slice(0, i);
+    let v = seg.slice(i + 1);
+    if (v.charCodeAt(0) === 16) {
+      const parts = v.substring(1).split('.');
+      const n = parseInt(parts[0], 36);
+      v = parts.length > 1 ? parseFloat(n + '.' + parseInt(parts[1], 36)) : n;
+    } else {
+      v = v.replaceAll(String.fromCharCode(31), '~').replaceAll(String.fromCharCode(30), '!');
+    }
+    obj[TC_QR_KEYS[k] || k] = v;
+  });
+  return obj;
+}
+
 function parseQrContent(text) {
   text = (text || '').trim();
   const out = { data: null, rollcall_id: null, raw: text };
 
-  // 1. JSON 格式
+  // 1. Tronclass /j?p= 紧凑格式
+  const m = text.match(/\/j\?p=([\s\S]+)/) || text.match(/[?&]p=([^&]+)/);
+  if (m) {
+    let payload = m[1];
+    try { payload = decodeURIComponent(payload); } catch (e) {}
+    const j = parseTcCompact(payload);
+    if (j.data) {
+      out.data = j.data;
+      if (j.rollcallId != null) out.rollcall_id = String(j.rollcallId);
+      return out;
+    }
+  }
+
+  // 2. JSON 格式
   try {
     const j = JSON.parse(text);
     if (j && typeof j === 'object') {
@@ -541,40 +581,9 @@ function parseQrContent(text) {
     }
   } catch (e) {}
 
-  // 2. URL 格式
-  if (/^https?:\/\//i.test(text)) {
-    try {
-      const u = new URL(text);
-      for (const k of ['data', 'code', 'token', 'qrcode', 'qr_data']) {
-        const v = u.searchParams.get(k);
-        if (v) { out.data = v; break; }
-      }
-      const pm = u.pathname.match(/\/(?:rollcall|qr[a-z]*)\/(\d+)/i);
-      if (pm) out.rollcall_id = pm[1];
-      if (!out.rollcall_id) {
-        for (const k of ['rollcall_id', 'rollcallId', 'rc_id']) {
-          const v = u.searchParams.get(k);
-          if (v) { out.rollcall_id = v; break; }
-        }
-      }
-    } catch (e) {}
-  }
-
-  // 3. 正则直接找凭据 (13位时间戳 + 29位hex = 42字符)
-  const cm = text.match(/(\d{13}[0-9a-f]{29})/i);
+  // 3. 正则直接找凭据 (10位秒级时间戳 + 32位hex = 42字符)
+  const cm = text.match(/(?:[^0-9a-f]|^)([0-9a-f]{42})(?![0-9a-f])/i);
   if (cm) out.data = cm[1];
-
-  // 4. 兜底：凭据前后的独立数字段视为 rollcall_id（如 "863884#<凭据>"）
-  if (!out.rollcall_id && !/^https?:\/\//i.test(text)) {
-    const before = text.slice(0, cm ? cm.index : 0);
-    const after = cm ? text.slice(cm.index + cm[1].length) : '';
-    for (const seg of [before, after]) {
-      const m = seg.match(/(?:^|[^0-9a-zA-Z])(\d{4,10})(?:[^0-9a-zA-Z]|$)/);
-      if (m) { out.rollcall_id = m[1]; break; }
-      const m2 = seg.match(/^(\d{4,10})$/);
-      if (m2) { out.rollcall_id = m2[1]; break; }
-    }
-  }
 
   return out;
 }
