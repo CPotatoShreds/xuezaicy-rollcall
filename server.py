@@ -394,6 +394,21 @@ def _now() -> float:
     return time.time()
 
 
+def _api_error_detail(resp) -> str:
+    """提取 Tronclass 签到接口的可读错误信息（如 签到已结束 / 二维码过期）"""
+    try:
+        body = resp.json()
+    except ValueError:
+        text = (resp.text or "").strip()
+        return f"HTTP {resp.status_code}: {text[:80]}" if text else f"HTTP {resp.status_code}"
+    if isinstance(body, dict):
+        for k in ("error", "message", "error_description", "error_msg", "detail", "msg"):
+            v = body.get(k)
+            if v:
+                return f"{str(v)[:100]} (HTTP {resp.status_code})"
+    return f"HTTP {resp.status_code}: {str(body)[:80]}"
+
+
 # ============ HTTP 处理器 ============
 
 class Handler(SimpleHTTPRequestHandler):
@@ -750,7 +765,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if resp.ok:
                     results.append({"user_id": m["id"], "name": m["name"], "status": "ok", "detail": ""})
                 else:
-                    results.append({"user_id": m["id"], "name": m["name"], "status": "failed", "detail": f"HTTP {resp.status_code}"})
+                    results.append({"user_id": m["id"], "name": m["name"], "status": "failed", "detail": _api_error_detail(resp)})
             except requests.RequestException as e:
                 results.append({"user_id": m["id"], "name": m["name"], "status": "failed", "detail": str(e)[:100]})
 
