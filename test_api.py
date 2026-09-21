@@ -124,7 +124,7 @@ api("/api/groups/join", "POST", {"invite_code": code}, token=t2)
 # ===== 5. QR 推送/轮询 =====
 print("=== QR Push & Poll ===")
 s, r = api(f"/api/groups/{gid}/push", "POST", {
-    "rollcall_id": "test123", "data": "qrtestdata", "timestamp": time.time() * 1000}, token=t1)
+    "rollcall_id": "123456", "data": "qrtestdata", "timestamp": time.time() * 1000}, token=t1)
 check(s == 200, "push QR", r)
 results = r.get("results", [])
 check(len(results) >= 1, f"push returned {len(results)} result(s)", r)
@@ -136,7 +136,7 @@ s, r = api(f"/api/groups/{gid}/poll?since=0", "GET", token=t2)
 items = r.get("items", [])
 check(s == 200 and len(items) >= 1, f"poll got {len(items)} item(s)", r)
 if items:
-    check(items[0]["rollcall_id"] == "test123", "QR rollcall_id correct", r)
+    check(items[0]["rollcall_id"] == "123456", "QR rollcall_id correct", r)
 
 events = r.get("events", [])
 check(len(events) >= 1, f"poll got {len(events)} event(s)", r)
@@ -155,6 +155,9 @@ check(s == 200 and len(r.get("items", [])) == 0, "future poll returns empty", r)
 print("=== Error Handling ===")
 s, r = api(f"/api/groups/{gid}/push", "POST", {}, token=t1)
 check(s == 400, "push without required fields", r)
+
+s, r = api(f"/api/groups/{gid}/push", "POST", {"rollcall_id": "abc", "data": "x"}, token=t1)
+check(s == 400, "non-numeric rollcall_id rejected", r)
 
 s, r = api("/api/groups/join", "POST", {"invite_code": "INVALID"}, token=t1)
 check(s == 404, "join invalid code", r)

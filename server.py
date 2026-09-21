@@ -409,6 +409,23 @@ def _api_error_detail(resp) -> str:
     return f"HTTP {resp.status_code}: {str(body)[:80]}"
 
 
+# CAS 验证限流：防止公网恶意枚举学号密码打爆服务器 IP 的 CAS 风控
+_CAS_ATTEMPTS: dict[str, list[float]] = {}
+_CAS_WINDOW = 600        # 10 分钟窗口
+_CAS_MAX_ATTEMPTS = 5    # 同一学号窗口内最多 CAS 验证次数
+
+
+def _cas_rate_ok(key: str) -> bool:
+    now = _now()
+    lst = [t for t in _CAS_ATTEMPTS.get(key, []) if now - t < _CAS_WINDOW]
+    if len(lst) >= _CAS_MAX_ATTEMPTS:
+        _CAS_ATTEMPTS[key] = lst
+        return False
+    lst.append(now)
+    _CAS_ATTEMPTS[key] = lst
+    return True
+
+
 # ============ HTTP 处理器 ============
 
 class Handler(SimpleHTTPRequestHandler):
@@ -499,6 +516,10 @@ class Handler(SimpleHTTPRequestHandler):
             uid = user["id"]
         else:
             # 新用户建档 / 密码变更 / 未绑定 → 走统一认证验证
+            # 公网防滥用：同一学号短期内过多次 CAS 验证直接拒绝（本机回环豁免，供本机测试）
+            if self.client_address[0] not in ("127.0.0.1", "::1") and not _cas_rate_ok(student_id):
+                log.warning(f"[限流] {student_id} CAS 验证过于频繁 ({self.client_address[0]})")
+                return self._send(429, {"error": "尝试过于频繁，请 10 分钟后再试"})
             try:
                 x_sid, cookies_json = cas_get_x_session_id(student_id, password)
             except RuntimeError as e:
@@ -712,6 +733,8 @@ class Handler(SimpleHTTPRequestHandler):
 
         if not rollcall_id or not qr_data:
             return self._send(400, {"error": "rollcall_id 和 data 为必填"})
+        if not rollcall_id.isdigit():
+            return self._send(400, {"error": "rollcall_id 格式错误"})
 
         conn = get_db()
         u = conn.execute("SELECT name, x_session, device_id FROM users WHERE id=?", (uid,)).fetchone()
@@ -748,13 +771,13 @@ class Handler(SimpleHTTPRequestHandler):
                     results.append({"user_id": m["id"], "name": m["name"], "status": "failed", "detail": f"统一认证不可达: {e}"})
                     continue
 
-            # 调签到 API
-            try:
-                resp = requests.put(
+            # 调签到 API（401 说明会话被服务端提前失效，强制续期后重试一次）
+            def _signin(sid: str):
+                return requests.put(
                     f"http://identity.tc.cqupt.edu.cn/api/rollcall/{rollcall_id}/answer_qr_rollcall",
                     headers={
                         "Content-Type": "application/json",
-                        "x-session-id": x_sid,
+                        "x-session-id": sid,
                         "User-Agent": "Mozilla/5.0 (Linux; Android 16; wv) AppleWebKit/537.36",
                         "Origin": "http://mobile.tc.cqupt.edu.cn",
                         "Referer": "http://mobile.tc.cqupt.edu.cn/",
@@ -762,6 +785,17 @@ class Handler(SimpleHTTPRequestHandler):
                     json={"data": qr_data, "deviceId": dev_id},
                     timeout=10,
                 )
+
+            try:
+                resp = _signin(x_sid)
+                if resp.status_code == 401:
+                    log.info(f"[推送] {m['student_id']} 会话失效，强制续期重试")
+                    try:
+                        x_sid = ensure_user_session(conn, m)
+                        resp = _signin(x_sid)
+                    except (RuntimeError, requests.RequestException) as e:
+                        results.append({"user_id": m["id"], "name": m["name"], "status": "failed", "detail": f"会话续期失败: {e}"})
+                        continue
                 if resp.ok:
                     results.append({"user_id": m["id"], "name": m["name"], "status": "ok", "detail": ""})
                 else:

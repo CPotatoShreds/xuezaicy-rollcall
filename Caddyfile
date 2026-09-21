@@ -5,10 +5,8 @@
 #   https://<SITE_IP>:8200/root.crt
 # 安装后（Android: 设置→加密与凭据→安装CA证书）刷新即无警告，
 # 且相机权限正常（HTTPS 安全上下文）。
-# 开启调试日志（定位 TLS 握手问题用，稳定后可删除 debug 一行）
 # fallback_sni：浏览器访问 IP 时不发送 SNI，无 SNI 连接回退到站点 IP 匹配证书
 {
-	debug
 	fallback_sni {$SITE_IP}
 }
 

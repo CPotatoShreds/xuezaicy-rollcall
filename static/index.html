@@ -524,6 +524,9 @@ async function api(method, path, data) {
     if (e.message.includes('401') || e.message.includes('未登录') || e.message.includes('过期')) {
       TOKEN = '';
       localStorage.removeItem('rc_token');
+      stopPolling();
+      stopScanner();
+      closeResult();
       showPage('login');
     }
     throw e;
@@ -586,6 +589,8 @@ function doLogout() {
   localStorage.removeItem('rc_token');
   ME = null;
   stopPolling();
+  stopScanner();
+  closeResult();
   showPage('login');
 }
 
