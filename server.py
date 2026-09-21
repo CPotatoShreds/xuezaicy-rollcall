@@ -11,6 +11,7 @@ import base64
 import hashlib
 import json
 import logging
+import mimetypes
 import os
 import re
 import secrets
@@ -909,6 +910,8 @@ def _keepalive_loop():
 
 def main():
     init_db()
+    # WASM 必须以正确 MIME 传输（WebAssembly.instantiateStreaming 校验）
+    mimetypes.add_type("application/wasm", ".wasm")
     threading.Thread(target=_keepalive_loop, daemon=True).start()
     static_dir = Path(__file__).parent / "static"
     os.chdir(str(static_dir))

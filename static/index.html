@@ -435,7 +435,7 @@ input,textarea,button{font-family:inherit}
   <button class="scan-back" onclick="stopScanner()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
   <button class="scan-zoom" id="scanZoomBtn" onclick="cycleZoom()">1x</button>
   <div class="scan-status" id="gScanStatus"></div>
-  <div class="scan-hint">将二维码放入框内，即可快速扫描</div>
+  <div class="scan-hint">将二维码置于画面中即可快速识别</div>
   <div class="scan-deco">
     <div class="sd-item">
       <div class="sd-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><rect x="16" y="16" width="6" height="6" rx="1" fill="none"/><line x1="19" y1="16" x2="19" y2="22" opacity=".5"/></svg></div>
@@ -835,8 +835,32 @@ function parseQrContent(text) {
 }
 
 let scanActive = false;
-let nativeStream = null, nativeLoop = null, detectBusy = false;
+let nativeStream = null, nativeLoop = null, detectBusy = false, wasmLoop = null, wasmFrameN = 0;
 let zoomSteps = null, zoomIdx = 0;
+
+// ===== zxing-wasm 二级解码器：原生检测器未命中时的高容错兜底（旋转/反色/缩放） =====
+let zxingMod = null, zxingLoading = null;
+function ensureZxing() {
+  if (zxingLoading) return zxingLoading;
+  zxingLoading = import('/vendor/zxing/reader.js').then(m => {
+    m.setZXingModuleOverrides({ locateFile: f => '/vendor/zxing/' + f });
+    zxingMod = m;
+    return m;
+  }).catch(() => { zxingMod = false; return false; });
+  return zxingLoading;
+}
+
+async function wasmDecode(video) {
+  if (!zxingMod || !zxingMod.readBarcodes || !video || video.readyState < 2) return null;
+  try {
+    const results = await zxingMod.readBarcodes(video, {
+      tryRotate: true, tryInvert: true, tryDownscale: true, formats: ['QRCode'],
+    });
+    return (results && results.length) ? results[0].text : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 function setScanStatus(msg) {
   const el = document.getElementById('gScanStatus');
@@ -847,6 +871,7 @@ function toggleScanner() {
   if (scanner || nativeStream) { stopScanner(); return; }
   document.getElementById('scannerOverlay').classList.add('open');
   setScanStatus('正在启动相机...');
+  ensureZxing(); // 相机预热期间并行加载 wasm
   let nativeOK = false;
   if ('BarcodeDetector' in window) {
     try { new BarcodeDetector({ formats: ['qr_code'] }); nativeOK = true; } catch (e) {}
@@ -891,7 +916,13 @@ async function startNativeScanner() {
     detectBusy = true;
     try {
       const codes = await detector.detect(video);
-      if (scanActive && codes && codes.length) onScanOk(codes[0].rawValue);
+      if (scanActive && codes && codes.length) { onScanOk(codes[0].rawValue); return; }
+      // 原生未命中 → 隔轮 zxing-wasm 全帧高容错兜底
+      wasmFrameN++;
+      if (zxingMod && wasmFrameN % 2 === 0) {
+        const text = await wasmDecode(video);
+        if (scanActive && text) onScanOk(text);
+      }
     } catch (e) {
       // 个别帧不可解码，忽略
     } finally {
@@ -945,6 +976,18 @@ function startFallbackScanner() {
     if (scanner) {
       scanActive = true;
       setScanStatus('');
+      // 兜底路径跑 wasm 并行解码（此路径本就无原生检测器）
+      const v = reader.querySelector('video');
+      wasmLoop = setInterval(async () => {
+        if (!scanActive || detectBusy) return;
+        detectBusy = true;
+        try {
+          const text = await wasmDecode(v);
+          if (scanActive && text) onScanOk(text);
+        } finally {
+          detectBusy = false;
+        }
+      }, 200);
     }
   }).catch(err => {
     showToast('无法启动相机: ' + (err && err.message || err));
@@ -955,6 +998,7 @@ function startFallbackScanner() {
 function stopScanner() {
   scanActive = false;
   if (nativeLoop) { clearInterval(nativeLoop); nativeLoop = null; }
+  if (wasmLoop) { clearInterval(wasmLoop); wasmLoop = null; }
   if (nativeStream) {
     nativeStream.getTracks().forEach(t => t.stop());
     nativeStream = null;
