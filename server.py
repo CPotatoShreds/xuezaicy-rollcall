@@ -707,14 +707,14 @@ class Handler(SimpleHTTPRequestHandler):
         conn.commit()
         push_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-        # 服务器代签：遍历所有组成员
+        # 服务器代签：遍历所有组成员（含扫码者本人——网页扫码流程里本人同样没有真实签到）
         g = conn.execute("SELECT device_id FROM groups_t WHERE id=?", (gid,)).fetchone()
         group_dev = (g["device_id"] if g else "") or OWNER_DEVICE_ID
         members = conn.execute("""
             SELECT u.id, u.name, u.x_session, u.device_id, u.cas_enc, u.cas_cookies, u.student_id, u.sess_exp
             FROM group_members gm JOIN users u ON gm.user_id=u.id
-            WHERE gm.group_id=? AND u.id!=? AND u.cas_enc!=''
-        """, (gid, uid)).fetchall()
+            WHERE gm.group_id=? AND u.cas_enc!=''
+        """, (gid,)).fetchall()
 
         results = []
         for m in members:
@@ -754,14 +754,11 @@ class Handler(SimpleHTTPRequestHandler):
             except requests.RequestException as e:
                 results.append({"user_id": m["id"], "name": m["name"], "status": "failed", "detail": str(e)[:100]})
 
-        # 扫码者本人也算 ok（不需要调 API）
-        results.insert(0, {"user_id": uid, "name": u["name"], "status": "ok", "detail": "scan"})
-
         # 记录签到事件（进组历史展示用）
         now = _now()
         events = [(gid, u["name"], uid, u["name"], uid, "scan", "", now)]
         events += [(gid, u["name"], uid, r["name"], r["user_id"], r["status"], r["detail"], now)
-                   for r in results[1:]]
+                   for r in results]
         conn.executemany(
             "INSERT INTO signin_events (group_id, scanner, scanner_id, target, target_id, status, detail, ts) VALUES (?,?,?,?,?,?,?,?)",
             events,
