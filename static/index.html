@@ -112,22 +112,15 @@ input,textarea,button{font-family:inherit}
 .fake-tab .ft-badge{position:absolute;top:-5px;left:calc(50% + 4px);background:#ee3f4d;color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px}
 
 /* ===== 全屏扫码（仿官方取景页） ===== */
+/* 视频由 html5-qrcode 按容器宽度自适应布局，扫码区域由库自绘 —— 保证视觉与解码区一致 */
 #scannerOverlay{position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;max-width:460px;background:#111;display:none;z-index:250;overflow:hidden}
 #scannerOverlay.open{display:block}
 #gReader{position:absolute;top:0;bottom:0;left:0;right:0}
-#gReader video{width:100%!important;height:100%!important;object-fit:cover}
-#gReader #qr-shaded-region{border:none!important}
-.scan-frame{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:250px;height:250px;pointer-events:none}
-.scan-frame i{position:absolute;width:26px;height:26px;border:3px solid #fff}
-.scan-frame i:nth-child(1){left:0;top:0;border-right:none;border-bottom:none;border-radius:6px 0 0 0}
-.scan-frame i:nth-child(2){right:0;top:0;border-left:none;border-bottom:none;border-radius:0 6px 0 0}
-.scan-frame i:nth-child(3){left:0;bottom:0;border-right:none;border-top:none;border-radius:0 0 0 6px}
-.scan-frame i:nth-child(4){right:0;bottom:0;border-left:none;border-top:none;border-radius:0 0 6px 0}
-.scan-back{position:absolute;top:18px;left:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.scan-back{position:absolute;top:18px;left:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5}
 .scan-back svg{width:20px;height:20px}
-.scan-status{position:absolute;left:0;right:0;bottom:176px;text-align:center;color:rgba(255,255,255,.75);font-size:12px}
-.scan-hint{position:absolute;left:0;right:0;bottom:148px;text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 4px rgba(0,0,0,.5)}
-.scan-deco{position:absolute;bottom:52px;left:0;right:0;display:flex;justify-content:space-between;padding:0 44px;pointer-events:none}
+.scan-status{position:absolute;left:0;right:0;bottom:176px;text-align:center;color:rgba(255,255,255,.75);font-size:12px;z-index:5}
+.scan-hint{position:absolute;left:0;right:0;bottom:148px;text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 4px rgba(0,0,0,.5);z-index:5}
+.scan-deco{position:absolute;bottom:52px;left:0;right:0;display:flex;justify-content:space-between;padding:0 44px;pointer-events:none;z-index:5}
 .scan-deco .sd-item{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;color:#eee}
 .scan-deco .sd-ic{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center}
 .scan-deco .sd-ic svg{width:26px;height:26px;color:#fff}
@@ -426,7 +419,6 @@ input,textarea,button{font-family:inherit}
 <!-- 全屏扫码（伪装：官方取景页） -->
 <div id="scannerOverlay">
   <div id="gReader"></div>
-  <div class="scan-frame"><i></i><i></i><i></i><i></i></div>
   <button class="scan-back" onclick="stopScanner()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
   <div class="scan-status" id="gScanStatus"></div>
   <div class="scan-hint">将二维码放入框内，即可快速扫描</div>
@@ -849,19 +841,27 @@ function toggleScanner() {
     scanner = new Html5Qrcode("gReader");
     scanActive = false;
     let lastHint = 0;
-    const qrBox = (vw, vh) => {
-      const s = Math.min(Math.floor(Math.min(vw, vh) * 0.62), 300);
-      return { width: s, height: s };
+    // 原生 BarcodeDetector（Chrome Android 支持）远距离/倾斜容错远好于内置 JS 解码器
+    const cfg = {
+      fps: 12,
+      qrbox: (vw, vh) => {
+        const s = Math.min(250, vw - 16, vh - 16);
+        return { width: s, height: s };
+      },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
     };
+    if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+      cfg.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
+    }
     scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: qrBox },
+      cfg,
       onScanOk,
       () => {
         // 每帧未识别到码都会回调，节流提示避免刷屏
         if (scanActive && Date.now() - lastHint > 8000) {
           lastHint = Date.now();
-          setScanStatus('识别中... 请让二维码完整落入取景框');
+          setScanStatus('识别中... 请让二维码完整落入亮区');
         }
       }
     ).then(() => {
