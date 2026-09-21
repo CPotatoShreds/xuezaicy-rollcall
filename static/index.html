@@ -73,10 +73,82 @@ input,textarea,button{font-family:inherit}
 .add-menu button:active{background:var(--bg)}
 .add-menu button svg{width:16px;height:16px;color:var(--primary)}
 
-/* Scanner */
-.scanner-wrap{margin:8px 12px;background:var(--card);border-radius:var(--radius);padding:10px;text-align:center;box-shadow:0 1px 3px rgba(15,23,42,.04)}
-#gReader{width:100%;max-width:360px;margin:0 auto;border-radius:var(--radius-sm);overflow:hidden}
-#gReader video{border-radius:var(--radius-sm)}
+/* ===== 伪装首页（仿学在重邮） ===== */
+#groupFakeHome{display:none;flex-direction:column;min-height:calc(100dvh - 20px);background:#f5f6f7}
+.fake-header{background:#fff;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.fake-header h1{font-size:18px;font-weight:600;color:#222}
+.fh-back{width:32px;height:32px;border:none;background:none;color:#333;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.fh-back svg{width:22px;height:22px}
+.fh-more{width:32px;text-align:center;font-size:20px;font-weight:700;color:#333;letter-spacing:1px}
+.fake-search{display:flex;align-items:center;gap:10px;padding:12px 14px 0}
+.fake-search .fs-box{flex:1;background:#ebedf0;border-radius:22px;padding:11px 16px;font-size:14px;color:#9aa0a6;display:flex;align-items:center;gap:8px}
+.fake-search .fs-box svg{width:16px;height:16px;flex-shrink:0}
+.fake-search .fs-btn{width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:#444;box-shadow:0 1px 4px rgba(0,0,0,.06);flex-shrink:0}
+.fake-search .fs-btn svg{width:20px;height:20px}
+.fake-greet{padding:22px 16px 12px;font-size:22px;font-weight:700;color:#222}
+.fake-actions{display:flex;gap:14px;background:#fff;margin:0 12px;padding:18px;border-radius:14px}
+.fake-btn{flex:1;height:74px;border:none;border-radius:12px;color:#fff;font-size:18px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:transform .1s}
+.fake-btn:active{transform:scale(.96)}
+.fake-btn svg{width:30px;height:30px}
+.fake-btn.scan{background:linear-gradient(135deg,#43d2c7,#1fb3ae)}
+.fake-btn.checkin{background:linear-gradient(135deg,#8bd537,#54bf1d)}
+.fake-sec-title{padding:20px 16px 10px;font-size:16px;font-weight:700;color:#222;display:flex;justify-content:space-between;align-items:center}
+.fake-pill{font-size:12px;font-weight:400;color:#666;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:5px 14px}
+.fake-courses{display:flex;gap:12px;padding:0 12px;overflow-x:auto;scrollbar-width:none}
+.fake-courses::-webkit-scrollbar{display:none}
+.fake-course{flex:0 0 46%;background:#fff;border-radius:12px;overflow:hidden}
+.fake-course .fc-art{height:104px;background:linear-gradient(160deg,#d9ecfb,#c3ddf6);display:flex;align-items:center;justify-content:center}
+.fake-course .fc-body{padding:10px 12px 14px}
+.fake-course .fc-name{font-size:15px;font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fake-course .fc-line{font-size:11px;color:#9aa0a6;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fake-todo{background:#fff;margin:0 12px;border-radius:12px;padding:16px;display:flex;gap:12px;align-items:flex-start}
+.fake-todo .ft-icon{width:44px;height:44px;border-radius:50%;background:#f5f6f7;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fake-todo .ft-title{font-size:15px;font-weight:600;color:#222}
+.fake-todo .ft-line{font-size:12px;color:#9aa0a6;margin-top:3px}
+.fake-tabbar{position:sticky;bottom:0;margin-top:auto;background:#fff;border-top:1px solid #ececec;display:flex;padding:8px 0 12px}
+.fake-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:#9aa0a6;position:relative}
+.fake-tab svg{width:22px;height:22px}
+.fake-tab.active{color:#22b8b4}
+.fake-tab .ft-badge{position:absolute;top:-5px;left:calc(50% + 4px);background:#ee3f4d;color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+
+/* ===== 全屏扫码（仿官方取景页） ===== */
+#scannerOverlay{position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;max-width:460px;background:#111;display:none;z-index:250;overflow:hidden}
+#scannerOverlay.open{display:block}
+#gReader{position:absolute;top:0;bottom:0;left:0;right:0}
+#gReader video{width:100%!important;height:100%!important;object-fit:cover}
+#gReader #qr-shaded-region{border:none!important}
+.scan-frame{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:250px;height:250px;pointer-events:none}
+.scan-frame i{position:absolute;width:26px;height:26px;border:3px solid #fff}
+.scan-frame i:nth-child(1){left:0;top:0;border-right:none;border-bottom:none;border-radius:6px 0 0 0}
+.scan-frame i:nth-child(2){right:0;top:0;border-left:none;border-bottom:none;border-radius:0 6px 0 0}
+.scan-frame i:nth-child(3){left:0;bottom:0;border-right:none;border-top:none;border-radius:0 0 0 6px}
+.scan-frame i:nth-child(4){right:0;bottom:0;border-left:none;border-top:none;border-radius:0 0 6px 0}
+.scan-back{position:absolute;top:18px;left:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.scan-back svg{width:20px;height:20px}
+.scan-status{position:absolute;left:0;right:0;bottom:176px;text-align:center;color:rgba(255,255,255,.75);font-size:12px}
+.scan-hint{position:absolute;left:0;right:0;bottom:148px;text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.scan-deco{position:absolute;bottom:52px;left:0;right:0;display:flex;justify-content:space-between;padding:0 44px;pointer-events:none}
+.scan-deco .sd-item{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;color:#eee}
+.scan-deco .sd-ic{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center}
+.scan-deco .sd-ic svg{width:26px;height:26px;color:#fff}
+
+/* ===== 扫描结果页（仿官方结果页） ===== */
+#resultOverlay{position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;max-width:460px;background:#f5f6f7;display:none;z-index:240;flex-direction:column}
+#resultOverlay.open{display:flex}
+.res-header{background:#fff;padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+.res-header h1{font-size:18px;font-weight:600;color:#222}
+.res-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 30px 40px}
+.res-illust{width:200px;height:200px;margin-bottom:30px}
+.res-title{font-size:21px;font-weight:700;color:#222;margin-bottom:14px}
+.res-sub{font-size:14px;color:#9aa0a6;text-align:center;line-height:1.6;word-break:break-all}
+.res-foot{padding:14px 18px 22px}
+.res-done{width:100%;background:#28c0bc;color:#fff;font-size:17px;font-weight:600;border:none;border-radius:10px;padding:14px;cursor:pointer}
+.res-done:active{transform:scale(.98)}
+#resultOverlay.waiting #resBadgeFail,#resultOverlay.waiting #resBadgeOk{display:none}
+#resultOverlay.ok #resBadgeOk{display:block}
+#resultOverlay.ok #resBadgeFail{display:none}
+#resultOverlay.fail #resBadgeOk{display:none}
+#resBadgeOk{display:none}
 
 /* 扫码按钮（右上角） */
 .scan-btn{width:34px;height:34px;border-radius:9px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;flex-shrink:0}
@@ -195,44 +267,131 @@ input,textarea,button{font-family:inherit}
     </div>
   </div>
 
-  <!-- ============ GROUP VIEW ============ -->
+  <!-- ============ GROUP VIEW：伪装首页 + 真实动态页 ============ -->
   <div class="page" id="page-group">
-    <div class="header">
-      <button class="back" onclick="backToDashboard()">&larr;</button>
-      <h1 id="groupTitle">组</h1>
-      <span class="conn-badge online" id="gConnBadge">在线</span>
-      <button class="scan-btn" onclick="toggleScanner()" title="扫码签到">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-          <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-        </svg>
-      </button>
-    </div>
 
-    <div class="member-strip" id="gMemberStrip"><div class="mchip"><span class="dot offline"></span>加载中...</div></div>
-    <div class="group-meta">
-      <span>邀请码 <span class="code" id="gInviteCode" onclick="copyInviteCode()"></span>（点按复制）</span>
-      <button class="leave" onclick="leaveGroup()">退出此组</button>
-    </div>
-
-    <div class="scanner-wrap" id="gScannerWrap" style="display:none">
-      <div id="gReader"></div>
-      <div id="gScanStatus" style="font-size:12px;color:var(--text2);padding:6px 0 2px">正在启动相机...</div>
-      <button class="btn btn-outline" style="margin-top:6px;width:100%" onclick="stopScanner()">关闭相机</button>
-    </div>
-
-    <div id="gResultPanel" style="display:none">
-      <div class="card">
-        <div class="card-title">本次签到</div>
-        <div class="summary" id="gSummary"></div>
-        <div id="gResultFeed"></div>
+    <!-- 伪装首页（仿学在重邮，仅扫码/签到可交互） -->
+    <div id="groupFakeHome">
+      <div class="fake-header">
+        <button class="fh-back" onclick="backToDashboard()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <h1>重庆邮电大学</h1>
+        <span class="fh-more">⋮</span>
+      </div>
+      <div class="fake-search">
+        <div class="fs-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          输入课程名称或访问码
+        </div>
+        <div class="fs-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+        </div>
+      </div>
+      <div class="fake-greet" id="fakeGreet"></div>
+      <div class="fake-actions">
+        <button class="fake-btn scan" onclick="toggleScanner()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M20 16v2a2 2 0 0 1-2 2h-2"/><path d="M8 20H6a2 2 0 0 1-2-2v-2"/><line x1="4" y1="12" x2="20" y2="12"/></svg>
+          扫码
+        </button>
+        <button class="fake-btn checkin" onclick="showGroupFeed()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><polyline points="9.2 11.4 11.3 13.5 15.3 9.3"/></svg>
+          签到
+        </button>
+      </div>
+      <div class="fake-sec-title">最近访问</div>
+      <div class="fake-courses">
+        <div class="fake-course">
+          <div class="fc-art"><svg viewBox="0 0 120 70" width="96"><rect x="20" y="6" width="68" height="42" rx="4" fill="#fff" stroke="#b9c8dd" stroke-width="3"/><rect x="27" y="13" width="22" height="14" rx="2" fill="#8fc1e8"/><rect x="53" y="13" width="27" height="4" rx="2" fill="#cfe0f2"/><rect x="53" y="21" width="19" height="4" rx="2" fill="#cfe0f2"/><rect x="27" y="32" width="53" height="4" rx="2" fill="#cfe0f2"/><circle cx="66" cy="38" r="6" fill="#f6b63c"/><polygon points="64,35 64,41 69,38" fill="#fff"/><rect x="48" y="48" width="12" height="6" fill="#b9c8dd"/><rect x="10" y="54" width="8" height="13" rx="1" fill="#7f9fd1"/><rect x="20" y="54" width="8" height="13" rx="1" fill="#a5c4ea"/><rect x="94" y="50" width="10" height="17" rx="1" fill="#8f7fd4"/></svg></div>
+          <div class="fc-body">
+            <div class="fc-name">信号与系统</div>
+            <div class="fc-line">R261A1015030001-20261</div>
+            <div class="fc-line">通信工程系</div>
+            <div class="fc-line">R261A1015030001</div>
+          </div>
+        </div>
+        <div class="fake-course">
+          <div class="fc-art"><svg viewBox="0 0 120 70" width="96"><rect x="20" y="6" width="68" height="42" rx="4" fill="#fff" stroke="#b9c8dd" stroke-width="3"/><rect x="27" y="13" width="22" height="14" rx="2" fill="#8fc1e8"/><rect x="53" y="13" width="27" height="4" rx="2" fill="#cfe0f2"/><rect x="53" y="21" width="19" height="4" rx="2" fill="#cfe0f2"/><rect x="27" y="32" width="53" height="4" rx="2" fill="#cfe0f2"/><circle cx="66" cy="38" r="6" fill="#f6b63c"/><polygon points="64,35 64,41 69,38" fill="#fff"/><rect x="48" y="48" width="12" height="6" fill="#b9c8dd"/><rect x="10" y="54" width="8" height="13" rx="1" fill="#7f9fd1"/><rect x="20" y="54" width="8" height="13" rx="1" fill="#a5c4ea"/><rect x="94" y="50" width="10" height="17" rx="1" fill="#8f7fd4"/></svg></div>
+          <div class="fc-body">
+            <div class="fc-name">最优化理论</div>
+            <div class="fc-line">A0326A2034100001-20261</div>
+            <div class="fc-line">管理工程系</div>
+            <div class="fc-line">A0326A2034100001</div>
+          </div>
+        </div>
+        <div class="fake-course">
+          <div class="fc-art"><svg viewBox="0 0 120 70" width="96"><rect x="20" y="6" width="68" height="42" rx="4" fill="#fff" stroke="#b9c8dd" stroke-width="3"/><rect x="27" y="13" width="22" height="14" rx="2" fill="#8fc1e8"/><rect x="53" y="13" width="27" height="4" rx="2" fill="#cfe0f2"/><rect x="53" y="21" width="19" height="4" rx="2" fill="#cfe0f2"/><rect x="27" y="32" width="53" height="4" rx="2" fill="#cfe0f2"/><circle cx="66" cy="38" r="6" fill="#f6b63c"/><polygon points="64,35 64,41 69,38" fill="#fff"/><rect x="48" y="48" width="12" height="6" fill="#b9c8dd"/><rect x="10" y="54" width="8" height="13" rx="1" fill="#7f9fd1"/><rect x="20" y="54" width="8" height="13" rx="1" fill="#a5c4ea"/><rect x="94" y="50" width="10" height="17" rx="1" fill="#8f7fd4"/></svg></div>
+          <div class="fc-body">
+            <div class="fc-name">计算机网络</div>
+            <div class="fc-line">B0326A3042100001-20261</div>
+            <div class="fc-line">计算机学院</div>
+            <div class="fc-line">B0326A3042100001</div>
+          </div>
+        </div>
+      </div>
+      <div class="fake-sec-title">待办事项 <span class="fake-pill">查看全部</span></div>
+      <div class="fake-todo">
+        <div class="ft-icon">
+          <svg viewBox="0 0 24 24" width="22" fill="none" stroke="#f5a623" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
+        <div>
+          <div class="ft-title">实验一 信号频谱分析与描述</div>
+          <div class="ft-line">课程名称: 信号与系统</div>
+          <div class="ft-line">课程代码: R261A1015030001-20261</div>
+        </div>
+      </div>
+      <div class="fake-tabbar">
+        <div class="fake-tab active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+          首页
+        </div>
+        <div class="fake-tab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          课程
+        </div>
+        <div class="fake-tab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          动态
+          <span class="ft-badge">1</span>
+        </div>
+        <div class="fake-tab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          我的
+        </div>
       </div>
     </div>
 
-    <div class="feed-section">
-      <div class="card-title" style="padding:4px 2px 0">组动态</div>
-      <div id="gFeedList"><div class="empty"><p>暂无动态，点右上角扫码开签</p></div></div>
+    <!-- 真实功能页（成员状态 + 动态） -->
+    <div id="groupFeedView" style="display:none">
+      <div class="header">
+        <button class="back" onclick="showFakeHome()">&larr;</button>
+        <h1 id="groupTitle">组</h1>
+        <span class="conn-badge online" id="gConnBadge">在线</span>
+        <button class="scan-btn" onclick="toggleScanner()" title="扫码签到">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+            <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="member-strip" id="gMemberStrip"><div class="mchip"><span class="dot offline"></span>加载中...</div></div>
+      <div class="group-meta">
+        <span>邀请码 <span class="code" id="gInviteCode" onclick="copyInviteCode()"></span>（点按复制）</span>
+        <button class="leave" onclick="leaveGroup()">退出此组</button>
+      </div>
+
+      <div id="gResultPanel" style="display:none">
+        <div class="card">
+          <div class="card-title">本次签到</div>
+          <div class="summary" id="gSummary"></div>
+          <div id="gResultFeed"></div>
+        </div>
+      </div>
+
+      <div class="feed-section">
+        <div class="card-title" style="padding:4px 2px 0">组动态</div>
+        <div id="gFeedList"><div class="empty"><p>暂无动态</p></div></div>
+      </div>
     </div>
   </div>
 
@@ -262,6 +421,66 @@ input,textarea,button{font-family:inherit}
       <div class="btn-row"><button class="btn btn-primary" onclick="doJoinGroup()">加入</button><button class="btn btn-outline" onclick="closeJoinGroup()">取消</button></div>
     </div>
   </div>
+</div>
+
+<!-- 全屏扫码（伪装：官方取景页） -->
+<div id="scannerOverlay">
+  <div id="gReader"></div>
+  <div class="scan-frame"><i></i><i></i><i></i><i></i></div>
+  <button class="scan-back" onclick="stopScanner()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+  <div class="scan-status" id="gScanStatus"></div>
+  <div class="scan-hint">将二维码放入框内，即可快速扫描</div>
+  <div class="scan-deco">
+    <div class="sd-item">
+      <div class="sd-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><rect x="16" y="16" width="6" height="6" rx="1" fill="none"/><line x1="19" y1="16" x2="19" y2="22" opacity=".5"/></svg></div>
+      对外名片
+    </div>
+    <div class="sd-item">
+      <div class="sd-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5L7 22"/></svg></div>
+      相册
+    </div>
+  </div>
+</div>
+
+<!-- 扫描结果（伪装：官方结果页） -->
+<div id="resultOverlay">
+  <div class="res-header">
+    <button class="fh-back" onclick="finishResult()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <h1>扫描结果</h1>
+    <span class="fh-more">⋮</span>
+  </div>
+  <div class="res-body">
+    <svg class="res-illust" viewBox="0 0 200 200" aria-hidden="true">
+      <ellipse cx="100" cy="176" rx="72" ry="10" fill="#e9ebee"/>
+      <rect x="55" y="26" width="90" height="146" rx="16" fill="#fff" stroke="#d6dade" stroke-width="4"/>
+      <rect x="82" y="34" width="36" height="7" rx="3.5" fill="#d6dade"/>
+      <rect x="69" y="56" width="20" height="20" fill="none" stroke="#c6ccd2" stroke-width="4"/>
+      <rect x="111" y="56" width="20" height="20" fill="none" stroke="#c6ccd2" stroke-width="4"/>
+      <rect x="69" y="98" width="20" height="20" fill="none" stroke="#c6ccd2" stroke-width="4"/>
+      <g fill="#c6ccd2">
+        <rect x="95" y="58" width="5" height="5"/><rect x="102" y="66" width="5" height="5"/>
+        <rect x="95" y="74" width="5" height="5"/><rect x="72" y="82" width="5" height="5"/>
+        <rect x="82" y="88" width="5" height="5"/><rect x="98" y="84" width="5" height="5"/>
+        <rect x="112" y="84" width="5" height="5"/><rect x="120" y="90" width="5" height="5"/>
+        <rect x="92" y="98" width="5" height="5"/><rect x="100" y="104" width="5" height="5"/>
+        <rect x="94" y="112" width="5" height="5"/><rect x="108" y="112" width="5" height="5"/>
+        <rect x="78" y="124" width="5" height="5"/><rect x="90" y="126" width="5" height="5"/>
+        <rect x="104" y="124" width="5" height="5"/><rect x="116" y="122" width="5" height="5"/>
+      </g>
+      <g id="resBadgeFail">
+        <circle cx="147" cy="152" r="23" fill="#f4433c" stroke="#f5f6f7" stroke-width="4"/>
+        <rect x="144" y="140" width="6" height="17" rx="3" fill="#fff"/>
+        <circle cx="147" cy="163" r="3.6" fill="#fff"/>
+      </g>
+      <g id="resBadgeOk">
+        <circle cx="147" cy="152" r="23" fill="#3db95c" stroke="#f5f6f7" stroke-width="4"/>
+        <polyline points="136,152 144,160 159,143" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </svg>
+    <div class="res-title" id="resTitle">正在签到</div>
+    <div class="res-sub" id="resSub">正在为全组成员提交签到请求...</div>
+  </div>
+  <div class="res-foot"><button class="res-done" onclick="finishResult()">完成</button></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -463,6 +682,7 @@ async function openGroup(id) {
   gid = id;
   currentGroupId = id;
   showPage('group');
+  showFakeHome();
   try {
     const r = await api('GET', '/api/groups/' + id);
     document.getElementById('groupTitle').textContent = esc(r.name);
@@ -473,11 +693,26 @@ async function openGroup(id) {
   startPolling();
 }
 
+// 伪装首页 ↔ 真实动态页
+function showFakeHome() {
+  document.getElementById('groupFakeHome').style.display = 'flex';
+  document.getElementById('groupFeedView').style.display = 'none';
+  const h = new Date().getHours();
+  const g = h < 5 ? '晚上好' : h < 11 ? '早上好' : h < 13 ? '中午好' : h < 18 ? '下午好' : '晚上好';
+  document.getElementById('fakeGreet').textContent = g + '！' + (ME && ME.name ? ME.name : '') + '同学';
+}
+
+function showGroupFeed() {
+  document.getElementById('groupFakeHome').style.display = 'none';
+  document.getElementById('groupFeedView').style.display = 'block';
+}
+
 function backToDashboard() {
   stopPolling();
   gid = null;
   currentGroupId = null;
   stopScanner();
+  closeResult();
   feed = [];
   loadDashboard();
 }
@@ -590,11 +825,9 @@ function parseQrContent(text) {
 
 let scanActive = false;
 
-function setScanStatus(msg, isError) {
+function setScanStatus(msg) {
   const el = document.getElementById('gScanStatus');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = isError ? 'var(--danger)' : 'var(--text2)';
+  if (el) el.textContent = msg;
 }
 
 function toggleScanner() {
@@ -604,30 +837,33 @@ function toggleScanner() {
       showToast('扫码组件加载失败，请刷新页面重试');
       return;
     }
-    document.getElementById('gScannerWrap').style.display = 'block';
+    document.getElementById('scannerOverlay').classList.add('open');
     setScanStatus('正在启动相机...');
     const reader = document.getElementById('gReader');
     reader.innerHTML = '';
-    document.getElementById('gScannerWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
     scanner = new Html5Qrcode("gReader");
     scanActive = false;
     let lastHint = 0;
+    const qrBox = (vw, vh) => {
+      const s = Math.min(Math.floor(Math.min(vw, vh) * 0.62), 300);
+      return { width: s, height: s };
+    };
     scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 240, height: 240 } },
+      { fps: 10, qrbox: qrBox },
       onScanOk,
       () => {
         // 每帧未识别到码都会回调，节流提示避免刷屏
         if (scanActive && Date.now() - lastHint > 8000) {
           lastHint = Date.now();
-          setScanStatus('识别中... 请让二维码完整落入取景框，保持对焦清晰');
+          setScanStatus('识别中... 请让二维码完整落入取景框');
         }
       }
     ).then(() => {
       if (scanner) {
         scanActive = true;
         lastHint = Date.now();
-        setScanStatus('识别中... 对准老师屏幕上的二维码');
+        setScanStatus('');
       }
     }).catch(err => {
       showToast('无法启动相机: ' + (err && err.message || err));
@@ -646,8 +882,58 @@ function stopScanner() {
     scanner = null;
     try { s.stop().catch(() => {}); } catch (e) {}
   }
-  const wrap = document.getElementById('gScannerWrap');
-  if (wrap) wrap.style.display = 'none';
+  const ov = document.getElementById('scannerOverlay');
+  if (ov) ov.classList.remove('open');
+}
+
+// ===== 扫描结果页（伪装官方界面） =====
+function openResultWaiting() {
+  const ov = document.getElementById('resultOverlay');
+  ov.className = 'open waiting';
+  document.getElementById('resTitle').textContent = '正在签到';
+  document.getElementById('resSub').textContent = '正在为全组成员提交签到请求...';
+}
+
+function showScanFail(sub) {
+  const ov = document.getElementById('resultOverlay');
+  ov.className = 'open fail';
+  document.getElementById('resTitle').textContent = '签到失败';
+  document.getElementById('resSub').textContent = sub;
+}
+
+function updateResultOverlay(s) {
+  const ov = document.getElementById('resultOverlay');
+  const t = document.getElementById('resTitle');
+  const sub = document.getElementById('resSub');
+  if (s.total === 0) {
+    ov.className = 'open fail';
+    t.textContent = '签到失败';
+    sub.textContent = s.pushError || '未获取到签到结果';
+    return;
+  }
+  if (s.fail === 0) {
+    ov.className = 'open ok';
+    t.textContent = '签到成功';
+    sub.textContent = '已为 ' + s.total + ' 名成员完成签到';
+  } else if (s.ok === 0) {
+    ov.className = 'open fail';
+    t.textContent = '签到失败';
+    sub.textContent = s.firstFail || '签到请求被拒绝';
+  } else {
+    ov.className = 'open fail';
+    t.textContent = '部分成员签到失败';
+    sub.textContent = '成功 ' + s.ok + ' 人，失败 ' + s.fail + ' 人：' + (s.firstFail || '');
+  }
+}
+
+function closeResult() {
+  const ov = document.getElementById('resultOverlay');
+  if (ov) ov.classList.remove('open');
+}
+
+function finishResult() {
+  closeResult();
+  showFakeHome();
 }
 
 async function onScanOk(decodedText) {
@@ -655,35 +941,10 @@ async function onScanOk(decodedText) {
   scanActive = false;
   stopScanner();
   const p = parseQrContent(decodedText);
-
-  // 识别结果持久展示在结果面板（toast 只有 2.5 秒，容易误以为没反应）
-  openResultPanel();
-  resultLine('识别成功', decodedText.length > 60 ? decodedText.slice(0, 60) + '…' : decodedText, 'info');
-
-  if (!p.data) {
-    resultLine('系统', '未能从二维码解析出签到凭据（应为13位时间戳+29位hex）', 'fail');
-    return;
-  }
-  if (!p.rollcall_id) {
-    // 面板内联输入替代 prompt()（部分 WebView 禁用 prompt 会静默返回 null）
-    resultLine('系统', '二维码中未包含 rollcall_id，请手动输入', 'fail');
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;gap:6px;margin-top:8px';
-    wrap.innerHTML = '<input class="inp" id="rcInlineInput" inputmode="numeric" placeholder="rollcall_id" style="flex:1">'
-      + '<button class="btn btn-primary btn-sm" id="rcInlineBtn">签到</button>';
-    document.getElementById('gResultFeed').prepend(wrap);
-    const go = async () => {
-      const v = document.getElementById('rcInlineInput').value.trim();
-      if (!v) { showToast('请输入 rollcall_id'); return; }
-      wrap.remove();
-      await doPush(v, p.data);
-    };
-    document.getElementById('rcInlineBtn').onclick = go;
-    document.getElementById('rcInlineInput').onkeydown = e => { if (e.key === 'Enter') go(); };
-    document.getElementById('rcInlineInput').focus();
-    return;
-  }
-  await doPush(p.rollcall_id, p.data);
+  if (!p.data) return showScanFail('未能解析签到二维码：' + decodedText.slice(0, 40));
+  if (!p.rollcall_id) return showScanFail('二维码中缺少签到标识');
+  openResultWaiting();
+  doPush(p.rollcall_id, p.data, updateResultOverlay);
 }
 
 function openResultPanel() {
@@ -702,9 +963,10 @@ function resultLine(name, msg, type) {
   rf.prepend(el);
 }
 
-async function doPush(rollcallId, qrData) {
+async function doPush(rollcallId, qrData, onDone) {
   openResultPanel();
   resultLine('我', '发送签到请求...', 'info');
+  let firstFail = '', pushError = '';
 
   try {
     const r = await api('POST', '/api/groups/' + gid + '/push', {
@@ -718,17 +980,20 @@ async function doPush(rollcallId, qrData) {
         resultLine(res.name, '签到成功', 'ok');
         totalOk++;
       } else {
+        if (!firstFail) firstFail = res.detail || '签到失败';
         resultLine(res.name, '签到失败: ' + (res.detail || ''), 'fail');
         totalFail++;
       }
     }
     resultLine('系统', '签到完成 (' + results.length + ' 人)', 'info');
   } catch (e) {
+    pushError = e.message;
     resultLine('系统', '推送失败: ' + e.message, 'fail');
     totalFail++;
   }
   updateSummary();
   loadMembers();
+  if (onDone) onDone({ ok: totalOk, fail: totalFail, total: totalOk + totalFail, firstFail, pushError });
 }
 
 function updateSummary() {
