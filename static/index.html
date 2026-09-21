@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <meta name="theme-color" content="#f4f6f9">
 <title>签到共享</title>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="vendor/html5-qrcode.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#f4f6f9;--card:#ffffff;--surface:#e5eaf1;--primary:#2f6bff;--success:#16a34a;--danger:#dc2626;--warning:#d97706;--text:#111827;--text2:#5b6472;--text3:#98a2b3;--radius:12px;--radius-sm:8px}
@@ -218,6 +218,7 @@ input,textarea,button{font-family:inherit}
 
     <div class="scanner-wrap" id="gScannerWrap" style="display:none">
       <div id="gReader"></div>
+      <div id="gScanStatus" style="font-size:12px;color:var(--text2);padding:6px 0 2px">正在启动相机...</div>
       <button class="btn btn-outline" style="margin-top:6px;width:100%" onclick="stopScanner()">关闭相机</button>
     </div>
 
@@ -563,53 +564,138 @@ function parseQrContent(text) {
   const cm = text.match(/(\d{13}[0-9a-f]{29})/i);
   if (cm) out.data = cm[1];
 
+  // 4. 兜底：凭据前后的独立数字段视为 rollcall_id（如 "863884#<凭据>"）
+  if (!out.rollcall_id && !/^https?:\/\//i.test(text)) {
+    const before = text.slice(0, cm ? cm.index : 0);
+    const after = cm ? text.slice(cm.index + cm[1].length) : '';
+    for (const seg of [before, after]) {
+      const m = seg.match(/(?:^|[^0-9a-zA-Z])(\d{4,10})(?:[^0-9a-zA-Z]|$)/);
+      if (m) { out.rollcall_id = m[1]; break; }
+      const m2 = seg.match(/^(\d{4,10})$/);
+      if (m2) { out.rollcall_id = m2[1]; break; }
+    }
+  }
+
   return out;
+}
+
+let scanActive = false;
+
+function setScanStatus(msg, isError) {
+  const el = document.getElementById('gScanStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--danger)' : 'var(--text2)';
 }
 
 function toggleScanner() {
   if (scanner) { stopScanner(); return; }
-  document.getElementById('gScannerWrap').style.display = 'block';
-  const reader = document.getElementById('gReader');
-  reader.innerHTML = '';
-  document.getElementById('gScannerWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  scanner = new Html5Qrcode("gReader");
-  scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 240 } }, onScanOk, () => {}).catch(err => {
-    showToast('无法启动相机: ' + err);
+  try {
+    if (typeof Html5Qrcode === 'undefined') {
+      showToast('扫码组件加载失败，请刷新页面重试');
+      return;
+    }
+    document.getElementById('gScannerWrap').style.display = 'block';
+    setScanStatus('正在启动相机...');
+    const reader = document.getElementById('gReader');
+    reader.innerHTML = '';
+    document.getElementById('gScannerWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scanner = new Html5Qrcode("gReader");
+    scanActive = false;
+    let lastHint = 0;
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      onScanOk,
+      () => {
+        // 每帧未识别到码都会回调，节流提示避免刷屏
+        if (scanActive && Date.now() - lastHint > 8000) {
+          lastHint = Date.now();
+          setScanStatus('识别中... 请让二维码完整落入取景框，保持对焦清晰');
+        }
+      }
+    ).then(() => {
+      if (scanner) {
+        scanActive = true;
+        lastHint = Date.now();
+        setScanStatus('识别中... 对准老师屏幕上的二维码');
+      }
+    }).catch(err => {
+      showToast('无法启动相机: ' + (err && err.message || err));
+      stopScanner();
+    });
+  } catch (e) {
+    showToast('扫码启动失败: ' + e.message);
     stopScanner();
-  });
+  }
 }
 
 function stopScanner() {
-  if (scanner) { try { scanner.stop(); } catch(e) {} scanner = null; }
+  scanActive = false;
+  if (scanner) {
+    const s = scanner;
+    scanner = null;
+    try { s.stop().catch(() => {}); } catch (e) {}
+  }
   const wrap = document.getElementById('gScannerWrap');
   if (wrap) wrap.style.display = 'none';
 }
 
 async function onScanOk(decodedText) {
+  if (!scanActive) return; // stop 尚未完成时可能连续回调，防重复推送
+  scanActive = false;
   stopScanner();
   const p = parseQrContent(decodedText);
-  if (!p.data) { showToast('未能从二维码解析出签到凭据'); return; }
-  let rc = p.rollcall_id;
-  if (!rc) rc = prompt('二维码中未包含 rollcall_id，请手动输入：');
-  if (!rc) return;
-  await doPush(rc, p.data);
+
+  // 识别结果持久展示在结果面板（toast 只有 2.5 秒，容易误以为没反应）
+  openResultPanel();
+  resultLine('识别成功', decodedText.length > 60 ? decodedText.slice(0, 60) + '…' : decodedText, 'info');
+
+  if (!p.data) {
+    resultLine('系统', '未能从二维码解析出签到凭据（应为13位时间戳+29位hex）', 'fail');
+    return;
+  }
+  if (!p.rollcall_id) {
+    // 面板内联输入替代 prompt()（部分 WebView 禁用 prompt 会静默返回 null）
+    resultLine('系统', '二维码中未包含 rollcall_id，请手动输入', 'fail');
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;gap:6px;margin-top:8px';
+    wrap.innerHTML = '<input class="inp" id="rcInlineInput" inputmode="numeric" placeholder="rollcall_id" style="flex:1">'
+      + '<button class="btn btn-primary btn-sm" id="rcInlineBtn">签到</button>';
+    document.getElementById('gResultFeed').prepend(wrap);
+    const go = async () => {
+      const v = document.getElementById('rcInlineInput').value.trim();
+      if (!v) { showToast('请输入 rollcall_id'); return; }
+      wrap.remove();
+      await doPush(v, p.data);
+    };
+    document.getElementById('rcInlineBtn').onclick = go;
+    document.getElementById('rcInlineInput').onkeydown = e => { if (e.key === 'Enter') go(); };
+    document.getElementById('rcInlineInput').focus();
+    return;
+  }
+  await doPush(p.rollcall_id, p.data);
 }
 
-async function doPush(rollcallId, qrData) {
+function openResultPanel() {
   document.getElementById('gResultPanel').style.display = 'block';
   document.getElementById('gResultFeed').innerHTML = '';
   totalOk = 0; totalFail = 0;
   updateSummary();
-  const line = (name, msg, type) => {
-    const rf = document.getElementById('gResultFeed');
-    const time = new Date().toLocaleTimeString('zh-CN', {hour12:false});
-    const el = document.createElement('div');
-    el.className = 'feed-entry';
-    el.innerHTML = '<div class="feed-time">' + time + '</div><div class="feed-msg"><span class="feed-name">' + esc(name) + '</span> <span class="feed-status ' + type + '">' + esc(msg) + '</span></div>';
-    rf.prepend(el);
-  };
+}
 
-  line('我', '发送签到请求...', 'info');
+function resultLine(name, msg, type) {
+  const rf = document.getElementById('gResultFeed');
+  const time = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+  const el = document.createElement('div');
+  el.className = 'feed-entry';
+  el.innerHTML = '<div class="feed-time">' + time + '</div><div class="feed-msg"><span class="feed-name">' + esc(name) + '</span> <span class="feed-status ' + type + '">' + esc(msg) + '</span></div>';
+  rf.prepend(el);
+}
+
+async function doPush(rollcallId, qrData) {
+  openResultPanel();
+  resultLine('我', '发送签到请求...', 'info');
 
   try {
     const r = await api('POST', '/api/groups/' + gid + '/push', {
@@ -620,16 +706,16 @@ async function doPush(rollcallId, qrData) {
     const results = r.results || [];
     for (const res of results) {
       if (res.status === 'ok') {
-        line(res.name, '签到成功', 'ok');
+        resultLine(res.name, '签到成功', 'ok');
         totalOk++;
       } else {
-        line(res.name, '签到失败: ' + (res.detail || ''), 'fail');
+        resultLine(res.name, '签到失败: ' + (res.detail || ''), 'fail');
         totalFail++;
       }
     }
-    line('系统', '签到完成 (' + results.length + ' 人)', 'info');
+    resultLine('系统', '签到完成 (' + results.length + ' 人)', 'info');
   } catch (e) {
-    line('系统', '推送失败: ' + e.message, 'fail');
+    resultLine('系统', '推送失败: ' + e.message, 'fail');
     totalFail++;
   }
   updateSummary();
