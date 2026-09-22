@@ -395,6 +395,15 @@ def _now() -> float:
     return time.time()
 
 
+_ERROR_CODE_ZH = {
+    "rollcall_already_closed": "签到已结束",
+    "rollcall_not_started": "签到未开始",
+    "qr_code_expired": "二维码过期",
+    "qr_expired": "二维码过期",
+    "already_answered": "已签到过",
+}
+
+
 def _api_error_detail(resp) -> str:
     """提取 Tronclass 签到接口的可读错误信息（如 签到已结束 / 二维码过期）"""
     try:
@@ -403,7 +412,10 @@ def _api_error_detail(resp) -> str:
         text = (resp.text or "").strip()
         return f"HTTP {resp.status_code}: {text[:80]}" if text else f"HTTP {resp.status_code}"
     if isinstance(body, dict):
-        for k in ("error", "message", "error_description", "error_msg", "detail", "msg"):
+        code = body.get("error_code")
+        if code and code in _ERROR_CODE_ZH:
+            return f"{_ERROR_CODE_ZH[code]} (HTTP {resp.status_code})"
+        for k in ("error", "message", "error_description", "error_msg", "error_code", "detail", "msg"):
             v = body.get(k)
             if v:
                 return f"{str(v)[:100]} (HTTP {resp.status_code})"
@@ -772,10 +784,11 @@ class Handler(SimpleHTTPRequestHandler):
                     results.append({"user_id": m["id"], "name": m["name"], "status": "failed", "detail": f"统一认证不可达: {e}"})
                     continue
 
-            # 调签到 API（401 说明会话被服务端提前失效，强制续期后重试一次）
+            # 调签到 API（注意：必须用 lms 域——网关按 Host 分流，identity 域的
+            # 该路径不接受 PUT，会返回边缘网关的 405 HTML）
             def _signin(sid: str):
                 return requests.put(
-                    f"http://identity.tc.cqupt.edu.cn/api/rollcall/{rollcall_id}/answer_qr_rollcall",
+                    f"http://lms.tc.cqupt.edu.cn/api/rollcall/{rollcall_id}/answer_qr_rollcall",
                     headers={
                         "Content-Type": "application/json",
                         "x-session-id": sid,
