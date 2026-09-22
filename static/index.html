@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <meta name="theme-color" content="#f4f6f9">
 <title>签到共享</title>
-<script src="vendor/html5-qrcode.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#f4f6f9;--card:#ffffff;--surface:#e5eaf1;--primary:#2f6bff;--success:#16a34a;--danger:#dc2626;--warning:#d97706;--text:#111827;--text2:#5b6472;--text3:#98a2b3;--radius:12px;--radius-sm:8px}
@@ -111,13 +110,12 @@ input,textarea,button{font-family:inherit}
 .fake-tab.active{color:#22b8b4}
 .fake-tab .ft-badge{position:absolute;top:-5px;left:calc(50% + 4px);background:#ee3f4d;color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px}
 
-/* ===== 全屏扫码（仿官方取景页） ===== */
-/* 主路径：getUserMedia + 原生 BarcodeDetector 全画面检测（无裁切、原始分辨率）
-   兜底：html5-qrcode 全画面解码（无 qrbox） */
+/* ===== 全屏扫码（仿官方取景页） =====
+   统一路径：getUserMedia(1080p) + 解码循环（原生 BarcodeDetector 优先，
+   全浏览器兜底 zxing-wasm 960px 降采样帧全画面解码） */
 #scannerOverlay{position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;max-width:460px;background:#111;display:none;z-index:250;overflow:hidden}
 #scannerOverlay.open{display:block}
 #scanVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
-#gReader{position:absolute;inset:0;display:none}
 .scan-frame{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:250px;height:250px;pointer-events:none;z-index:4}
 .scan-frame i{position:absolute;width:26px;height:26px;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.4)}
 .scan-frame i:nth-child(1){left:0;top:0;border-right:none;border-bottom:none;border-radius:6px 0 0 0}
@@ -430,7 +428,6 @@ input,textarea,button{font-family:inherit}
 <!-- 全屏扫码（伪装：官方取景页） -->
 <div id="scannerOverlay">
   <video id="scanVideo" autoplay muted playsinline></video>
-  <div id="gReader"></div>
   <div class="scan-frame"><i></i><i></i><i></i><i></i><span class="scan-line"></span></div>
   <button class="scan-back" onclick="stopScanner()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
   <button class="scan-zoom" id="scanZoomBtn" onclick="cycleZoom()">1x</button>
@@ -496,7 +493,6 @@ input,textarea,button{font-family:inherit}
 let TOKEN = localStorage.getItem('rc_token') || '';
 let ME = null;
 let currentGroupId = null;
-let scanner = null;
 let pollTimer = null;
 let lastPollTime = 0;
 let feed = [];
@@ -835,10 +831,11 @@ function parseQrContent(text) {
 }
 
 let scanActive = false;
-let nativeStream = null, nativeLoop = null, detectBusy = false, wasmLoop = null, wasmFrameN = 0;
+let camStream = null, scanLoop = null, detectBusy = false, wasmFrameN = 0;
 let zoomSteps = null, zoomIdx = 0;
+let wasmCanvas = null, wasmCtx = null;
 
-// ===== zxing-wasm 二级解码器：原生检测器未命中时的高容错兜底（旋转/反色/缩放） =====
+// ===== zxing-wasm 解码器（自托管 zxing-cpp；旋转/反色/降采样全开） =====
 let zxingMod = null, zxingLoading = null;
 function ensureZxing() {
   if (zxingLoading) return zxingLoading;
@@ -853,7 +850,18 @@ function ensureZxing() {
 async function wasmDecode(video) {
   if (!zxingMod || !zxingMod.readBarcodes || !video || video.readyState < 2) return null;
   try {
-    const results = await zxingMod.readBarcodes(video, {
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w || !h) return null;
+    // 降采样到 960px 宽：QR 模块只需约 2px 分辨率，速度提升 4 倍
+    const scale = Math.min(1, 960 / w);
+    const cw = Math.max(2, Math.round(w * scale)), ch = Math.max(2, Math.round(h * scale));
+    if (!wasmCanvas) {
+      wasmCanvas = document.createElement('canvas');
+      wasmCtx = wasmCanvas.getContext('2d', { willReadFrequently: true });
+    }
+    if (wasmCanvas.width !== cw) { wasmCanvas.width = cw; wasmCanvas.height = ch; }
+    wasmCtx.drawImage(video, 0, 0, cw, ch);
+    const results = await zxingMod.readBarcodes(wasmCanvas, {
       tryRotate: true, tryInvert: true, tryDownscale: true, tryHarder: true, formats: ['QRCode'],
     });
     return (results && results.length) ? results[0].text : null;
@@ -868,26 +876,17 @@ function setScanStatus(msg) {
 }
 
 function toggleScanner() {
-  if (scanner || nativeStream) { stopScanner(); return; }
+  if (camStream) { stopScanner(); return; }
   document.getElementById('scannerOverlay').classList.add('open');
   setScanStatus('正在启动相机...');
   ensureZxing(); // 相机预热期间并行加载 wasm
-  let nativeOK = false;
-  if ('BarcodeDetector' in window) {
-    try { new BarcodeDetector({ formats: ['qr_code'] }); nativeOK = true; } catch (e) {}
-  }
-  if (nativeOK) {
-    // 主路径：原生检测器全画面识别（Android Chrome / 部分 WebView）
-    startNativeScanner().catch(err => {
-      showToast('无法启动相机: ' + (err && err.message || err));
-      stopScanner();
-    });
-  } else {
-    startFallbackScanner();
-  }
+  startScanner().catch(err => {
+    showToast('无法启动相机: ' + (err && err.message || err));
+    stopScanner();
+  });
 }
 
-async function startNativeScanner() {
+async function startScanner() {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
     audio: false,
@@ -895,7 +894,7 @@ async function startNativeScanner() {
   const video = document.getElementById('scanVideo');
   video.srcObject = stream;
   await video.play();
-  nativeStream = stream;
+  camStream = stream;
   scanActive = true;
   setScanStatus('');
   try {
@@ -910,16 +909,21 @@ async function startNativeScanner() {
       btn.textContent = (Math.round((zoomSteps[0] / (z.min || 1)) * 10) / 10) + 'x';
     }
   } catch (e) {}
-  const detector = new BarcodeDetector({ formats: ['qr_code'] });
-  nativeLoop = setInterval(async () => {
+  // 原生检测器（有 GMS 服务的安卓 Chrome 等）；无则直接 zxing-wasm
+  let detector = null;
+  if ('BarcodeDetector' in window) {
+    try { detector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) {}
+  }
+  scanLoop = setInterval(async () => {
     if (!scanActive || detectBusy || video.readyState < 2) return;
     detectBusy = true;
     try {
-      const codes = await detector.detect(video);
-      if (scanActive && codes && codes.length) { onScanOk(codes[0].rawValue); return; }
-      // 原生未命中 → 隔轮 zxing-wasm 全帧高容错兜底
+      if (detector) {
+        const codes = await detector.detect(video);
+        if (scanActive && codes && codes.length) { onScanOk(codes[0].rawValue); return; }
+      }
       wasmFrameN++;
-      if (zxingMod && wasmFrameN % 2 === 0) {
+      if (zxingMod && (!detector || wasmFrameN % 2 === 0)) {
         const text = await wasmDecode(video);
         if (scanActive && text) onScanOk(text);
       }
@@ -937,82 +941,24 @@ function zoomLabel(v) {
 }
 
 function cycleZoom() {
-  if (!nativeStream || !zoomSteps) return;
+  if (!camStream || !zoomSteps) return;
   zoomIdx = (zoomIdx + 1) % zoomSteps.length;
   const v = zoomSteps[zoomIdx];
-  nativeStream.getVideoTracks()[0].applyConstraints({ advanced: [{ zoom: v }] })
+  camStream.getVideoTracks()[0].applyConstraints({ advanced: [{ zoom: v }] })
     .then(() => { document.getElementById('scanZoomBtn').textContent = zoomLabel(v); })
     .catch(() => {});
 }
 
-function startFallbackScanner() {
-  if (typeof Html5Qrcode === 'undefined') {
-    showToast('扫码组件加载失败，请刷新页面重试');
-    stopScanner();
-    return;
-  }
-  document.getElementById('scanVideo').style.display = 'none';
-  const reader = document.getElementById('gReader');
-  reader.style.display = 'block';
-  reader.innerHTML = '';
-  scanner = new Html5Qrcode('gReader');
-  scanActive = false;
-  let lastHint = 0;
-  const cfg = {
-    fps: 12,
-    // 无 qrbox：全画面解码（远距离小码也能识别）
-    videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-  };
-  if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
-    cfg.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
-  }
-  scanner.start(cfg.videoConstraints, cfg, onScanOk, () => {
-    if (scanActive && Date.now() - lastHint > 8000) {
-      lastHint = Date.now();
-      setScanStatus('识别中... 请将二维码对准取景框');
-    }
-  }).then(() => {
-    if (scanner) {
-      scanActive = true;
-      setScanStatus('');
-      // 兜底路径跑 wasm 并行解码（此路径本就无原生检测器）
-      const v = reader.querySelector('video');
-      wasmLoop = setInterval(async () => {
-        if (!scanActive || detectBusy) return;
-        detectBusy = true;
-        try {
-          const text = await wasmDecode(v);
-          if (scanActive && text) onScanOk(text);
-        } finally {
-          detectBusy = false;
-        }
-      }, 200);
-    }
-  }).catch(err => {
-    showToast('无法启动相机: ' + (err && err.message || err));
-    stopScanner();
-  });
-}
-
 function stopScanner() {
   scanActive = false;
-  if (nativeLoop) { clearInterval(nativeLoop); nativeLoop = null; }
-  if (wasmLoop) { clearInterval(wasmLoop); wasmLoop = null; }
-  if (nativeStream) {
-    nativeStream.getTracks().forEach(t => t.stop());
-    nativeStream = null;
+  if (scanLoop) { clearInterval(scanLoop); scanLoop = null; }
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
     zoomSteps = null;
     const video = document.getElementById('scanVideo');
     if (video) video.srcObject = null;
     document.getElementById('scanZoomBtn').style.display = 'none';
-    document.getElementById('scanVideo').style.display = '';
-    document.getElementById('gReader').style.display = 'none';
-  }
-  if (scanner) {
-    const s = scanner;
-    scanner = null;
-    try { s.stop().catch(() => {}); } catch (e) {}
   }
   const ov = document.getElementById('scannerOverlay');
   if (ov) ov.classList.remove('open');
