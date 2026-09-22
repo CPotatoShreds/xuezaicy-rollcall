@@ -798,6 +798,12 @@ function parseTcCompact(payload) {
 
 function parseQrContent(text) {
   text = (text || '').trim();
+  // zxing-cpp 系解码器把 C0 控制字符显示为 <DLE> 等转义名，还原为实际字符
+  const C0 = ['NUL','SOH','STX','ETX','EOT','ENQ','ACK','BEL','BS','HT','LF','VT','FF','CR','SO','SI','DLE','DC1','DC2','DC3','DC4','NAK','SYN','ETB','CAN','EM','SUB','ESC','FS','GS','RS','US'];
+  text = text.replace(/<([A-Z]{2,3})>/g, (s, n) => {
+    const i = C0.indexOf(n);
+    return i >= 0 ? String.fromCharCode(i) : s;
+  });
   const out = { data: null, rollcall_id: null, raw: text };
 
   // 1. Tronclass /j?p= 紧凑格式
@@ -861,7 +867,10 @@ async function wasmDecode(video) {
     }
     if (wasmCanvas.width !== cw) { wasmCanvas.width = cw; wasmCanvas.height = ch; }
     wasmCtx.drawImage(video, 0, 0, cw, ch);
-    const results = await zxingMod.readBarcodes(wasmCanvas, {
+    // zxing-wasm 3.x 的 readBarcodes 只接受 {data,width,height} 像素输入，
+    // 不接受 canvas/video 等 DOM 元素（会抛 Invalid input type）
+    const img = wasmCtx.getImageData(0, 0, cw, ch);
+    const results = await zxingMod.readBarcodes(img, {
       tryRotate: true, tryInvert: true, tryDownscale: true, tryHarder: true, formats: ['QRCode'],
     });
     return (results && results.length) ? results[0].text : null;
@@ -914,7 +923,19 @@ async function startScanner() {
   if ('BarcodeDetector' in window) {
     try { detector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) {}
   }
+  const startedAt = Date.now();
+  let loadWarned = false, failWarned = false;
   scanLoop = setInterval(async () => {
+    if (scanActive && !detectBusy) {
+      // 解码器加载状态可见化，避免无声失败
+      if (!failWarned && Date.now() - startedAt > 8000 && zxingMod === false) {
+        failWarned = true;
+        setScanStatus('解码器加载失败，请刷新页面重试');
+      } else if (!loadWarned && Date.now() - startedAt > 3000 && zxingMod === null) {
+        loadWarned = true;
+        setScanStatus('解码器加载中...');
+      }
+    }
     if (!scanActive || detectBusy || video.readyState < 2) return;
     detectBusy = true;
     try {
@@ -996,7 +1017,7 @@ function updateResultOverlay(s) {
   } else if (s.ok === 0) {
     ov.className = 'open fail';
     t.textContent = '签到失败';
-    sub.textContent = s.firstFail || '签到请求被拒绝';
+    sub.textContent = s.firstFail || s.pushError || '签到请求被拒绝';
   } else {
     ov.className = 'open fail';
     t.textContent = '部分成员签到失败';
