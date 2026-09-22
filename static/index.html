@@ -854,7 +854,7 @@ async function wasmDecode(video) {
   if (!zxingMod || !zxingMod.readBarcodes || !video || video.readyState < 2) return null;
   try {
     const results = await zxingMod.readBarcodes(video, {
-      tryRotate: true, tryInvert: true, tryDownscale: true, formats: ['QRCode'],
+      tryRotate: true, tryInvert: true, tryDownscale: true, tryHarder: true, formats: ['QRCode'],
     });
     return (results && results.length) ? results[0].text : null;
   } catch (e) {
