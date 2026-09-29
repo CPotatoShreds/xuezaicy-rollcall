@@ -423,6 +423,18 @@ input,textarea,button{font-family:inherit}
       <div class="btn-row"><button class="btn btn-primary" onclick="doJoinGroup()">加入</button><button class="btn btn-outline" onclick="closeJoinGroup()">取消</button></div>
     </div>
   </div>
+
+  <!-- ============ CUSTOM GROUP MODAL ============ -->
+  <div class="modal-overlay" id="customModal">
+    <div class="modal">
+      <h2>自定义组</h2>
+      <div class="inp-group"><label>组名称（可选，留空自动命名）</label><input class="inp" id="customGroupName" placeholder="eg. 今天下午的选修课"></div>
+      <div class="inp-group"><label>选择成员（自己会自动加入）</label><input class="inp" id="customUserFilter" placeholder="搜索姓名或学号" oninput="renderUserPickList()"></div>
+      <div id="customUserList" style="max-height:280px;overflow-y:auto;border:1px solid var(--surface);border-radius:var(--radius-sm);padding:0 10px"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px" id="customPickHint"></div>
+      <div class="btn-row"><button class="btn btn-primary" id="customCreateBtn" onclick="doCreateCustomGroup()">创建并进入</button><button class="btn btn-outline" onclick="closeCustomGroup()">取消</button></div>
+    </div>
+  </div>
 </div>
 
 <!-- 全屏扫码（伪装：官方取景页） -->
@@ -615,11 +627,14 @@ async function loadGroups() {
     const list = document.getElementById('groupList');
     const groups = r.groups || [];
     document.getElementById('groupCount').textContent = groups.length + ' 个组';
-    if (groups.length === 0) {
-      list.innerHTML = '<div class="empty"><p>暂无组，创建一个或加入已有组</p></div>';
-      return;
+    // “仅自己”组由专用入口渲染，从普通列表去重
+    const selfG = groups.find(g => g.name === '仅自己');
+    const others = selfG ? groups.filter(g => g.id !== selfG.id) : groups;
+    let html = '';
+    if (others.length === 0) {
+      html += '<div class="empty"><p>还没有组，点右上角 ＋ 创建或加入</p></div>';
     }
-    list.innerHTML = groups.map(g => `
+    html += others.map(g => `
       <div class="group-item" onclick="openGroup(${g.id})">
         <div class="g-icon">${esc(g.name.charAt(0))}</div>
         <div class="g-info">
@@ -628,6 +643,38 @@ async function loadGroups() {
         </div>
       </div>
     `).join('');
+    // 两个固定入口，与普通组同一层级并列显示
+    html += `
+      <div class="group-item" onclick="openSelfGroup()">
+        <div class="g-icon" style="background:var(--success)">我</div>
+        <div class="g-info">
+          <div class="g-name">仅自己</div>
+          <div class="g-meta">${selfG ? selfG.member_count + ' 人 · 点按进入' : '点按进入只含自己的组'}</div>
+        </div>
+      </div>
+      <div class="group-item" onclick="showCustomGroup()">
+        <div class="g-icon" style="background:#8b5cf6">＋</div>
+        <div class="g-info">
+          <div class="g-name">自定义组</div>
+          <div class="g-meta">从注册用户中多选成员，组成临时组</div>
+        </div>
+      </div>
+    `;
+    list.innerHTML = html;
+  } catch (e) {
+    showToast(e.message);
+  }
+}
+
+// “仅自己”：找到（或首次点击时创建）只含自己的组并进入
+async function openSelfGroup() {
+  try {
+    let g = (await api('GET', '/api/groups')).groups.find(x => x.name === '仅自己');
+    if (!g) {
+      g = await api('POST', '/api/groups', { name: '仅自己' });
+      showToast('已创建「仅自己」组');
+    }
+    openGroup(g.id);
   } catch (e) {
     showToast(e.message);
   }
@@ -680,6 +727,84 @@ async function doJoinGroup() {
   } catch (e) {
     showToast(e.message);
   }
+}
+
+// ============ 自定义组（多选注册用户组成临时组） ============
+let pickUsers = [];
+let pickedIds = new Set();
+
+async function showCustomGroup() {
+  closeAddMenu();
+  document.getElementById('customGroupName').value = '';
+  document.getElementById('customUserFilter').value = '';
+  pickedIds = new Set();
+  document.getElementById('customModal').classList.add('active');
+  const listEl = document.getElementById('customUserList');
+  listEl.innerHTML = '<div class="empty"><p>加载注册用户中...</p></div>';
+  updatePickHint();
+  try {
+    const r = await api('GET', '/api/users');
+    pickUsers = (r.users || []).filter(u => !ME || u.id !== ME.id);
+    renderUserPickList();
+  } catch (e) {
+    pickUsers = [];
+    listEl.innerHTML = '<div class="empty"><p>加载失败：' + esc(e.message) + '</p></div>';
+  }
+}
+
+function closeCustomGroup() {
+  document.getElementById('customModal').classList.remove('active');
+}
+
+function renderUserPickList() {
+  const q = document.getElementById('customUserFilter').value.trim().toLowerCase();
+  const listEl = document.getElementById('customUserList');
+  const users = pickUsers.filter(u =>
+    !q || (u.name || '').toLowerCase().includes(q) || (u.student_id || '').includes(q));
+  if (users.length === 0) {
+    listEl.innerHTML = '<div class="empty"><p>' + (pickUsers.length ? '无匹配用户' : '暂无其他注册用户') + '</p></div>';
+    return;
+  }
+  listEl.innerHTML = users.map(u => {
+    const on = pickedIds.has(u.id);
+    return `
+      <div class="group-item" style="padding:9px 0" onclick="togglePick(${u.id})">
+        <div class="g-icon" style="width:30px;height:30px;font-size:12px;margin-right:8px;background:${on ? 'var(--success)' : 'var(--surface)'};color:${on ? '#fff' : 'var(--text2)'}">${on ? '✓' : esc((u.name || '?').charAt(0))}</div>
+        <div class="g-info">
+          <div class="g-name" style="font-size:13px">${esc(u.name)}</div>
+          <div class="g-meta">${esc(u.student_id)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function togglePick(id) {
+  if (pickedIds.has(id)) pickedIds.delete(id); else pickedIds.add(id);
+  renderUserPickList();
+  updatePickHint();
+}
+
+function updatePickHint() {
+  document.getElementById('customPickHint').textContent = '已选 ' + pickedIds.size + ' 人';
+}
+
+async function doCreateCustomGroup() {
+  const name = document.getElementById('customGroupName').value.trim();
+  const finalName = name || ('临时组 ' +
+    new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, ''));
+  const btn = document.getElementById('customCreateBtn');
+  btn.disabled = true;
+  try {
+    const g = await api('POST', '/api/groups', { name: finalName, member_ids: [...pickedIds] });
+    closeCustomGroup();
+    showToast('已创建，共 ' + g.member_count + ' 人');
+    await loadGroups();
+    openGroup(g.id);
+  } catch (e) {
+    showToast(e.message);
+  }
+  btn.disabled = false;
 }
 
 // ============ GROUP VIEW ============
@@ -1192,7 +1317,7 @@ function showSettings() {
   document.getElementById('settingsContent').innerHTML = `
     <div class="stat-row"><span class="label">统一认证码</span><span class="value">${esc(ME.student_id)}</span></div>
     <div class="inp-group"><label>昵称</label><input class="inp" id="setName" value="${esc(ME.name)}"></div>
-    <div class="inp-group"><label>设备 ID（可选）</label><input class="inp" id="setDevId" value="${esc(ME.device_id)}" placeholder="留空使用所在组的设备ID"></div>
+    <div class="inp-group"><label>设备 ID（填写后覆盖系统分配）</label><input class="inp" id="setDevId" value="${esc(ME.device_id)}" placeholder="留空恢复系统自动分配"></div>
     <div class="stat-row"><span class="label">x-session-id</span><span class="value ${sessStatus}">${sessStatus}</span></div>
     <div class="stat-row"><span class="label">预览</span><span class="value" style="font-size:11px;font-family:monospace;color:var(--text3)">${ME.x_session_preview || '无'}</span></div>
     <button class="btn btn-sm btn-outline btn-block" onclick="refreshSession()" style="margin-top:4px">刷新会话</button>

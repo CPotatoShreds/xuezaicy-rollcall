@@ -20,6 +20,7 @@ import threading
 import time
 import urllib.parse
 import socketserver
+import uuid
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
@@ -40,8 +41,6 @@ DB_PATH = str(Path(__file__).parent / "data" / "rollcall.db")
 FERNET_KEY_PATH = str(Path(__file__).parent / "data" / "fernet.key")
 SESSION_KEEPALIVE_HOURS = 6  # 会话保活扫描周期（见文件末尾 keepalive）
 DEFAULT_GROUP_NAME = "默认组"
-# 站长设备 ID：默认组成员代签时使用（成员未设置个人 device_id 时）
-OWNER_DEVICE_ID = "86e75964-5563-4a76-9cdb-f26a8dae7ca3"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -162,10 +161,14 @@ def init_db():
         except sqlite3.OperationalError:
             pass
     _ensure_default_group(conn)
+    _assign_default_device_ids(conn)
+    # 组级设备已废弃（人人独立设备），清除存量值
+    conn.execute("UPDATE groups_t SET device_id='' WHERE device_id!=''")
+    conn.commit()
 
 
 def _ensure_default_group(conn):
-    """默认组：所有用户登录后自动加入，使用站长设备 ID 代签。"""
+    """默认组：所有用户登录后自动加入。"""
     row = conn.execute("SELECT id FROM groups_t WHERE name=?", (DEFAULT_GROUP_NAME,)).fetchone()
     if row:
         return
@@ -173,11 +176,28 @@ def _ensure_default_group(conn):
     while conn.execute("SELECT 1 FROM groups_t WHERE invite_code=?", (code,)).fetchone():
         code = _gen_invite_code()
     conn.execute(
-        "INSERT INTO groups_t (name, invite_code, device_id, created_by, created_at) VALUES (?,?,?,?,?)",
-        (DEFAULT_GROUP_NAME, code, OWNER_DEVICE_ID, None, _now()),
+        "INSERT INTO groups_t (name, invite_code, created_by, created_at) VALUES (?,?,?,?)",
+        (DEFAULT_GROUP_NAME, code, None, _now()),
     )
     conn.commit()
     log.info(f"[默认组] 已创建 (邀请码 {code})")
+
+
+def _assign_default_device_ids(conn):
+    """为无设备 ID 的用户生成固定的独立设备 ID。
+
+    上游 LMS 拒绝同一 device_id 为多个账号代签，每人必须有独立设备 ID；
+    用户在设置中自行填写的值会覆盖系统分配值。
+    """
+    rows = conn.execute("SELECT id FROM users WHERE device_id=''").fetchall()
+    if not rows:
+        return
+    conn.executemany(
+        "UPDATE users SET device_id=? WHERE id=?",
+        [(str(uuid.uuid4()), r["id"]) for r in rows],
+    )
+    conn.commit()
+    log.info(f"[设备] 已为 {len(rows)} 个用户分配默认设备 ID")
 
 
 # ============ AES-128-CBC (CQUPT CAS 密码加密) ============
@@ -493,6 +513,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._create_group(user_id)
         if path == "/api/groups/join" and method == "POST":
             return self._join_group(user_id)
+        if path == "/api/users" and method == "GET":
+            return self._list_users(user_id)
 
         # /api/groups/{id}/...
         m = re.match(r"^/api/groups/(\d+)(/.*)?$", path)
@@ -552,8 +574,8 @@ class Handler(SimpleHTTPRequestHandler):
                 log.info(f"[登录] {student_id} 凭据已更新")
             else:
                 conn.execute(
-                    "INSERT INTO users (student_id, name, pwd_hash, cas_enc, cas_cookies, x_session, sess_exp, created_at) VALUES (?,?,?,?,?,?,?,?)",
-                    (student_id, student_id, _hash_pwd(password), cas_enc, cookies_json, x_sid, _now() + 86400, _now()),
+                    "INSERT INTO users (student_id, name, pwd_hash, cas_enc, cas_cookies, x_session, sess_exp, device_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (student_id, student_id, _hash_pwd(password), cas_enc, cookies_json, x_sid, _now() + 86400, str(uuid.uuid4()), _now()),
                 )
                 uid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
                 log.info(f"[登录] 新用户 {student_id} 建档成功")
@@ -624,8 +646,11 @@ class Handler(SimpleHTTPRequestHandler):
             updates.append("name=?")
             params.append(data["name"].strip())
         if "device_id" in data:
+            dev = data["device_id"].strip()
+            if not dev:
+                dev = str(uuid.uuid4())  # 清空 = 恢复系统分配
             updates.append("device_id=?")
-            params.append(data["device_id"].strip())
+            params.append(dev)
         if updates:
             params.append(uid)
             conn.execute(f"UPDATE users SET {','.join(updates)} WHERE id=?", params)
@@ -667,11 +692,20 @@ class Handler(SimpleHTTPRequestHandler):
         """, (uid,)).fetchall()
         return self._send(200, {"groups": [dict(r) for r in rows]})
 
+    def _list_users(self, uid: int):
+        """注册用户列表（供自定义组多选成员）。"""
+        conn = get_db()
+        rows = conn.execute("SELECT id, name, student_id FROM users ORDER BY name, student_id").fetchall()
+        return self._send(200, {"users": [dict(r) for r in rows]})
+
     def _create_group(self, uid: int):
         data = self._parse_json()
         name = data.get("name", "").strip()
         if not name:
             return self._send(400, {"error": "组名为必填"})
+        member_ids = data.get("member_ids") or []
+        if not isinstance(member_ids, list):
+            return self._send(400, {"error": "member_ids 须为数组"})
         conn = get_db()
         code = _gen_invite_code()
         while conn.execute("SELECT 1 FROM groups_t WHERE invite_code=?", (code,)).fetchone():
@@ -681,9 +715,23 @@ class Handler(SimpleHTTPRequestHandler):
         gid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.execute("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?,?,?,?)",
                      (gid, uid, "owner", _now()))
+        # 自定义组：直接拉入选定的初始成员（不存在的用户被外键约束拒绝，忽略）
+        for mid in member_ids:
+            try:
+                mid = int(mid)
+            except (TypeError, ValueError):
+                continue
+            if mid == uid:
+                continue
+            try:
+                conn.execute("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?,?,?,?)",
+                             (gid, mid, "member", _now()))
+            except sqlite3.IntegrityError:
+                pass
         conn.commit()
-        log.info(f"[创建组] {name} ({code}) by {uid}")
-        return self._send(200, {"id": gid, "name": name, "invite_code": code, "member_count": 1})
+        mc = conn.execute("SELECT COUNT(*) FROM group_members WHERE group_id=?", (gid,)).fetchone()[0]
+        log.info(f"[创建组] {name} ({code}) by {uid}, {mc} 人")
+        return self._send(200, {"id": gid, "name": name, "invite_code": code, "member_count": mc})
 
     def _join_group(self, uid: int):
         data = self._parse_json()
@@ -759,8 +807,6 @@ class Handler(SimpleHTTPRequestHandler):
         push_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
         # 服务器代签：遍历所有组成员（含扫码者本人——网页扫码流程里本人同样没有真实签到）
-        g = conn.execute("SELECT device_id FROM groups_t WHERE id=?", (gid,)).fetchone()
-        group_dev = (g["device_id"] if g else "") or OWNER_DEVICE_ID
         members = conn.execute("""
             SELECT u.id, u.name, u.x_session, u.device_id, u.cas_enc, u.cas_cookies, u.student_id, u.sess_exp
             FROM group_members gm JOIN users u ON gm.user_id=u.id
@@ -770,8 +816,13 @@ class Handler(SimpleHTTPRequestHandler):
         results = []
         for m in members:
             x_sid = m["x_session"]
-            # 设备优先级：成员个人设置 > 组设置 > 站长设备
-            dev_id = m["device_id"] or group_dev
+            # 每人独立设备 ID（上游拒绝同一 device_id 为多账号代签）；
+            # 正常在建号/启动迁移时已分配，此处兜底懒生成
+            dev_id = m["device_id"]
+            if not dev_id:
+                dev_id = str(uuid.uuid4())
+                conn.execute("UPDATE users SET device_id=? WHERE id=?", (dev_id, m["id"]))
+                conn.commit()
 
             # 检查 session 是否过期，过期则续期
             if not x_sid or m["sess_exp"] < _now():

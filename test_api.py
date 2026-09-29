@@ -85,10 +85,16 @@ check(s in (401, 404), f"register endpoint removed (status={s})", r)
 print("=== User Info ===")
 s, r = api("/api/me", "GET", token=t1)
 check(s == 200 and r["user"]["cas_bound"] is True, "get me (cas_bound)", r)
-check(r["user"]["device_id"] == "", "device_id empty (用组设置)", r)
 
 s, r = api("/api/me", "POST", {"name": "TestA"}, token=t1)
 check(s == 200, "update name", r)
+
+s, r = api("/api/me", "POST", {"device_id": "custom-dev-001"}, token=t1)
+check(s == 200 and r["user"]["device_id"] == "custom-dev-001", "自定义 device_id 覆盖默认", r)
+
+s, r = api("/api/me", "POST", {"device_id": ""}, token=t1)
+dev1 = r["user"]["device_id"]
+check(dev1 and dev1 != "custom-dev-001", "清空 device_id 恢复系统分配", dev1)
 
 # ===== 3. 默认组自动加入 =====
 print("=== Default Group ===")
@@ -96,8 +102,7 @@ s, r = api("/api/groups", "GET", token=t1)
 groups = r.get("groups", [])
 default = next((g for g in groups if g["name"] == "默认组"), None)
 check(default is not None, "user A auto-joined 默认组", r)
-check(default and default.get("device_id") == "86e75964-5563-4a76-9cdb-f26a8dae7ca3",
-      "默认组使用站长 device_id", default)
+check(default and default.get("device_id") == "", "默认组不再绑定站长 device_id", default)
 
 s, r = api("/api/groups", "GET", token=t2)
 check(any(g["name"] == "默认组" for g in r.get("groups", [])), "user B auto-joined 默认组", r)
@@ -131,6 +136,15 @@ check(len(results) >= 1, f"push returned {len(results)} result(s)", r)
 # 成员 B cas_enc 无效 → 优雅失败而非 500
 check(any(res.get("status") == "failed" and "重新登录" in res.get("detail", "") for res in results),
       "invalid credential fails gracefully", results)
+
+# 每人独立设备 ID：推送路径兜底分配，各不相同
+s, r = api("/api/me", "GET", token=t1)
+dev_a = r["user"]["device_id"]
+s, r = api("/api/me", "GET", token=t2)
+dev_b = r["user"]["device_id"]
+check(dev_a and dev_a.count("-") == 4, "用户 A 有固定 device_id", dev_a)
+check(dev_b and dev_b.count("-") == 4, "用户 B 有固定 device_id", dev_b)
+check(dev_a != dev_b, "各用户 device_id 互不相同", (dev_a, dev_b))
 
 s, r = api(f"/api/groups/{gid}/poll?since=0", "GET", token=t2)
 items = r.get("items", [])
